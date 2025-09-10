@@ -7,6 +7,8 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+.env.*
+
 venv/
 .venv/
 instance/
@@ -17,8 +19,3 @@ node_modules/
 dist/
 build/
 .cache/
-.next/
-.env.*
-.npm/
-yarn-error.log
-coverage/
