@@ -1,0 +1,10 @@
+product_sku,year_from,year_to,make,model,submodel,engine,notes
+MET-7811,2015,2018,Subaru,WRX,STI,2.5L EJ25,Requires up-pipe adapter
+MET-7811,2019,2021,Subaru,WRX,STI,2.5L FA25,Direct bolt-on application
+MET-5432,2015,2021,Subaru,WRX,Base,2.0L FA20,Complete kit included
+MET-5432,2015,2021,Subaru,WRX,STI,2.5L EJ25,Complete kit included
+MET-5432,2019,2021,Subaru,WRX,STI,2.5L FA25,Complete kit included
+MET-9876,2015,2021,Subaru,WRX,Base,2.0L FA20,ECU tuning required
+MET-9876,2015,2021,Subaru,WRX,STI,2.5L EJ25,ECU tuning required
+MET-9876,2019,2021,Subaru,WRX,STI,2.5L FA25,ECU tuning required
+
