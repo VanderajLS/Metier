@@ -1,75 +1,66 @@
-// API service for connecting to the backend
-const API_BASE_URL = 'http://localhost:5000/api';
+// frontend/src/services/api.js
+// Minimal, resilient API client wired to your live backend.
+// If you later set Vercel env var VITE_API_BASE_URL, this will use it automatically.
 
-class ApiService {
-  async fetchProducts(params = {}) {
-    try {
-      const queryParams = new URLSearchParams();
-      
-      if (params.search) queryParams.append('search', params.search);
-      if (params.category) queryParams.append('category', params.category);
-      if (params.page) queryParams.append('page', params.page);
-      if (params.per_page) queryParams.append('per_page', params.per_page);
-      
-      const url = `${API_BASE_URL}/products${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      throw error;
-    }
+const API_BASE =
+  import.meta?.env?.VITE_API_BASE_URL?.trim() ||
+  "https://metier-backend-metier-back-end-new.up.railway.app";
+
+async function request(path, options = {}) {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  // Try to parse JSON; if not JSON, throw a readable error
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`Non-JSON response ${res.status}: ${text?.slice(0, 200)}`);
   }
 
-  async fetchProductDetail(productId) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/products/${productId}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching product detail:', error);
-      throw error;
-    }
+  if (!res.ok) {
+    const msg = (data && (data.message || data.error)) || res.statusText;
+    throw new Error(msg || `Request failed ${res.status}`);
   }
-
-  async fetchRelatedProducts(productId) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/products/${productId}/related`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching related products:', error);
-      throw error;
-    }
-  }
-
-  async fetchCategories() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/categories`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      throw error;
-    }
-  }
+  return data;
 }
 
-export default new ApiService();
+// --- Public API ---
+// Use both names so your UI won’t break regardless of how it was wired.
+export async function listProducts() {
+  // Backend fallback route we just verified
+  return request("/api/products");
+}
+export async function getProducts() {
+  return listProducts();
+}
 
+// Optional helpers (no-ops for now so the app won’t crash if they’re called)
+export async function getProduct(id) {
+  // If/when you add /api/products/:id on the backend, switch to: return request(`/api/products/${id}`);
+  const all = await listProducts();
+  return all.find((p) => String(p.id) === String(id)) || null;
+}
+export async function searchProducts(q = "") {
+  const all = await listProducts();
+  const ql = q.toLowerCase();
+  return all.filter((p) =>
+    Object.values(p).join(" ").toLowerCase().includes(ql)
+  );
+}
+
+const ApiService = {
+  listProducts,
+  getProducts,
+  getProduct,
+  searchProducts,
+};
+
+export default ApiService;
