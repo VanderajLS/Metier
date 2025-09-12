@@ -1,9 +1,9 @@
 // frontend/src/services/api.js
-// Minimal, resilient API client wired to your live backend.
-// If you later set Vercel env var VITE_API_BASE_URL, this will use it automatically.
+// Live API base for Metier frontend → Railway backend.
+// If you later set a Vercel env var VITE_API_BASE_URL, this will use it automatically.
 
 const API_BASE =
-  import.meta?.env?.VITE_API_BASE_URL?.trim() ||
+  (import.meta?.env?.VITE_API_BASE_URL || "").trim() ||
   "https://metier-backend-metier-back-end-new.up.railway.app";
 
 async function request(path, options = {}) {
@@ -16,13 +16,12 @@ async function request(path, options = {}) {
     ...options,
   });
 
-  // Try to parse JSON; if not JSON, throw a readable error
-  const text = await res.text();
-  let data;
+  const bodyText = await res.text();
+  let data = null;
   try {
-    data = text ? JSON.parse(text) : null;
+    data = bodyText ? JSON.parse(bodyText) : null;
   } catch {
-    throw new Error(`Non-JSON response ${res.status}: ${text?.slice(0, 200)}`);
+    throw new Error(`Non-JSON response ${res.status}: ${bodyText?.slice(0, 200)}`);
   }
 
   if (!res.ok) {
@@ -32,19 +31,14 @@ async function request(path, options = {}) {
   return data;
 }
 
-// --- Public API ---
-// Use both names so your UI won’t break regardless of how it was wired.
+// Public API the UI can call
 export async function listProducts() {
-  // Backend fallback route we just verified
   return request("/api/products");
 }
 export async function getProducts() {
   return listProducts();
 }
-
-// Optional helpers (no-ops for now so the app won’t crash if they’re called)
 export async function getProduct(id) {
-  // If/when you add /api/products/:id on the backend, switch to: return request(`/api/products/${id}`);
   const all = await listProducts();
   return all.find((p) => String(p.id) === String(id)) || null;
 }
@@ -56,11 +50,5 @@ export async function searchProducts(q = "") {
   );
 }
 
-const ApiService = {
-  listProducts,
-  getProducts,
-  getProduct,
-  searchProducts,
-};
-
+const ApiService = { listProducts, getProducts, getProduct, searchProducts };
 export default ApiService;
