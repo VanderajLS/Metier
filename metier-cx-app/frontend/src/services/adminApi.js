@@ -1,11 +1,9 @@
-// metier-cx-app/frontend/src/services/adminApi.js
-// Admin-only API calls (create, upload, AI describe). Uses the same base rule as the site.
-
+// src/services/adminApi.js
 const API_BASE =
   (import.meta?.env?.VITE_API_BASE_URL || "").trim() ||
-  "https://metier-backend-metier-back-end-new.up.railway.app";
+  "https://api.metierturbo.com";
 
-// JSON helper
+// Helper to make JSON requests
 async function jsonReq(path, body, method = "POST") {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
@@ -14,34 +12,28 @@ async function jsonReq(path, body, method = "POST") {
   });
   const text = await res.text();
   let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
-  if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || text || res.statusText;
-    throw new Error(msg);
-  }
+  try { data = text ? JSON.parse(text) : null; } catch {}
+  if (!res.ok) throw new Error((data && (data.message || data.error)) || text || res.statusText);
   return data;
 }
 
-// multipart helper
+// Helper for multipart (legacy proxy upload)
 async function formReq(path, formData) {
   const res = await fetch(`${API_BASE}${path}`, { method: "POST", body: formData });
   const text = await res.text();
   let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
-  if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || text || res.statusText;
-    throw new Error(msg);
-  }
+  try { data = text ? JSON.parse(text) : null; } catch {}
+  if (!res.ok) throw new Error((data && (data.message || data.error)) || text || res.statusText);
   return data;
 }
 
-// ---- Admin endpoints ----
-export function aiDescribe({ name, sku, category, price, image_url, specs }) {
-  return jsonReq(`/api/admin/ai/describe`, { name, sku, category, price, image_url, specs });
+// ----- Endpoints your admin page calls -----
+export function aiDescribe(payload) {
+  return jsonReq(`/api/admin/ai/describe`, payload);
 }
 
-export function createProductJson({ name, sku, category, price, image_url, description, specs }) {
-  return jsonReq(`/api/admin/products`, { name, sku, category, price, image_url, description, specs });
+export function createProductJson(payload) {
+  return jsonReq(`/api/admin/products`, payload);
 }
 
 export function uploadProductWithImage({ name, sku, category, price, description, specs, file }) {
