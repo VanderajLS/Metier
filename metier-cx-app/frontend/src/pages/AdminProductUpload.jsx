@@ -1,5 +1,6 @@
 // src/pages/AdminProductUpload.jsx
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function AdminProductUpload() {
   const [infoFile, setInfoFile] = useState(null);
@@ -140,6 +141,12 @@ export default function AdminProductUpload() {
 
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
+      {/* ✅ Navigation */}
+      <nav style={{ marginBottom: 20 }}>
+        <Link to="/products" style={{ marginRight: 12 }}>View Products</Link>
+        <Link to="/admin">Admin Upload</Link>
+      </nav>
+
       <h1>Admin: Upload Product</h1>
       <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
         <label>
