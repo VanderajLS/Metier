@@ -16,7 +16,10 @@ export default function ComingSoon() {
       return;
     }
     if (code.trim() === PASS) {
+      // Session flag – protects /admin and other protected routes
       sessionStorage.setItem("metier_auth", "ok");
+      setMsg("Welcome!");
+      // Where to send testers after login:
       navigate("/admin", { replace: true });
     } else {
       setMsg("Incorrect passcode. Try again.");
@@ -39,7 +42,6 @@ export default function ComingSoon() {
         <p style={{lineHeight: 1.6, color: "#ccc", marginBottom: 28}}>
           We’re tuning the next evolution of performance. Check back soon.
         </p>
-
         <form onSubmit={unlock} style={{
           display: "grid",
           gridTemplateColumns: "1fr auto",
