@@ -19,7 +19,6 @@ export default function AdminProductUpload() {
   const [busy, setBusy] = useState(false);
 
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
 console.log("🛰️ API_BASE in build:", API_BASE);
 
   async function presignAndUpload(file, folder) {
