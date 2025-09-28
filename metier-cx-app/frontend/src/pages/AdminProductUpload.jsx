@@ -1,4 +1,3 @@
-// src/pages/AdminProductUpload.jsx
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -12,6 +11,7 @@ export default function AdminProductUpload() {
     sku: "",
     category: "",
     price: "",
+    inventory: "",
     specs: "",
     description: "",
     image_url: ""
@@ -22,8 +22,8 @@ export default function AdminProductUpload() {
   const API_BASE =
     import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
 
+  // --- Helpers ---
   async function presignAndUpload(file, folder) {
-    // Step 1: request presign
     const presignRes = await fetch(`${API_BASE}/api/admin/images/presign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -36,7 +36,6 @@ export default function AdminProductUpload() {
     if (!presignRes.ok) throw new Error("Presign request failed");
     const { upload_url, public_url } = await presignRes.json();
 
-    // Step 2: PUT file directly to R2
     const uploadRes = await fetch(upload_url, {
       method: "PUT",
       headers: { "Content-Type": file.type },
@@ -47,15 +46,16 @@ export default function AdminProductUpload() {
     return public_url;
   }
 
+  // --- Upload description image ---
   async function handleInfoUpload() {
     if (!infoFile) return;
     try {
       setBusy(true);
-      setMsg("Uploading info image...");
+      setMsg("Uploading description image...");
       const url = await presignAndUpload(infoFile, "products/info");
       setPreviewInfo(url);
       setFields((f) => ({ ...f, image_url: url }));
-      setMsg("Info image uploaded!");
+      setMsg("Description image uploaded!");
     } catch (e) {
       setMsg(`Info upload error: ${e.message}`);
     } finally {
@@ -63,6 +63,7 @@ export default function AdminProductUpload() {
     }
   }
 
+  // --- Upload product gallery images ---
   async function handleProductUploads() {
     if (!productFiles.length) return;
     try {
@@ -82,19 +83,36 @@ export default function AdminProductUpload() {
     }
   }
 
+  // --- Generate fields with AI ---
   async function handleDescribe() {
+    if (!fields.image_url) {
+      setMsg("Upload a description image first.");
+      return;
+    }
     try {
       setBusy(true);
-      setMsg("Generating description with AI...");
+      setMsg("Generating product details with AI...");
       const res = await fetch(`${API_BASE}/api/admin/ai/describe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fields),
+        body: JSON.stringify({
+          image_url: fields.image_url,
+          price: fields.price,
+          inventory: fields.inventory,
+        }),
       });
       const data = await res.json();
-      if (data.description) {
-        setFields((f) => ({ ...f, description: data.description }));
-      }
+      if (data.error) throw new Error(data.message || "AI error");
+      setFields((f) => ({
+        ...f,
+        name: data.name || f.name,
+        category: data.category || f.category,
+        sku: data.sku || f.sku,
+        specs: data.specs || f.specs,
+        description: data.description || f.description,
+        price: data.price || f.price,
+        inventory: data.inventory || f.inventory,
+      }));
       setMsg("AI description generated.");
     } catch (e) {
       setMsg(`AI error: ${e.message}`);
@@ -103,9 +121,9 @@ export default function AdminProductUpload() {
     }
   }
 
+  // --- Save product ---
   async function handleSave(e) {
     e.preventDefault();
-    if (!fields.name.trim()) return setMsg("Name is required.");
     try {
       setBusy(true);
       setMsg("Saving product...");
@@ -118,12 +136,13 @@ export default function AdminProductUpload() {
         }),
       });
       if (!res.ok) throw new Error("Save failed");
-      setMsg("Product saved! Check your catalog.");
+      setMsg("Product saved! Check the catalog.");
       setFields({
         name: "",
         sku: "",
         category: "",
         price: "",
+        inventory: "",
         specs: "",
         description: "",
         image_url: "",
@@ -139,9 +158,9 @@ export default function AdminProductUpload() {
     }
   }
 
+  // --- UI ---
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-      {/* ✅ Navigation */}
       <nav style={{ marginBottom: 20 }}>
         <Link to="/products" style={{ marginRight: 12 }}>View Products</Link>
         <Link to="/admin">Admin Upload</Link>
@@ -149,54 +168,8 @@ export default function AdminProductUpload() {
 
       <h1>Admin: Upload Product</h1>
       <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
-        <label>
-          Name*<br />
-          <input
-            value={fields.name}
-            onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
-            required
-          />
-        </label>
-        <label>
-          SKU<br />
-          <input
-            value={fields.sku}
-            onChange={(e) => setFields((f) => ({ ...f, sku: e.target.value }))}
-          />
-        </label>
-        <label>
-          Category<br />
-          <input
-            value={fields.category}
-            onChange={(e) =>
-              setFields((f) => ({ ...f, category: e.target.value }))
-            }
-          />
-        </label>
-        <label>
-          Price<br />
-          <input
-            type="number"
-            step="0.01"
-            value={fields.price}
-            onChange={(e) =>
-              setFields((f) => ({ ...f, price: e.target.value }))
-            }
-          />
-        </label>
-        <label>
-          Specs/Notes<br />
-          <textarea
-            value={fields.specs}
-            onChange={(e) =>
-              setFields((f) => ({ ...f, specs: e.target.value }))
-            }
-            rows={3}
-          />
-        </label>
-
         <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
-          <legend>Info Image (for AI)</legend>
+          <legend>Description Image</legend>
           <input
             type="file"
             accept="image/*"
@@ -215,7 +188,7 @@ export default function AdminProductUpload() {
         </fieldset>
 
         <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
-          <legend>Product Images (gallery)</legend>
+          <legend>Product Images</legend>
           <input
             type="file"
             accept="image/*"
@@ -229,14 +202,7 @@ export default function AdminProductUpload() {
           >
             {busy ? "Uploading..." : "Upload Product Images"}
           </button>
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              marginTop: 10,
-            }}
-          >
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
             {previewProducts.map((url, i) => (
               <img key={i} src={url} alt="prod preview" style={{ width: 120 }} />
             ))}
@@ -244,28 +210,77 @@ export default function AdminProductUpload() {
         </fieldset>
 
         <label>
+          Price<br />
+          <input
+            type="number"
+            step="0.01"
+            value={fields.price}
+            onChange={(e) => setFields((f) => ({ ...f, price: e.target.value }))}
+          />
+        </label>
+
+        <label>
+          Inventory<br />
+          <input
+            type="number"
+            value={fields.inventory}
+            onChange={(e) => setFields((f) => ({ ...f, inventory: e.target.value }))}
+          />
+        </label>
+
+        <button
+          type="button"
+          onClick={handleDescribe}
+          disabled={busy || !fields.image_url}
+        >
+          {busy ? "Working..." : "Generate with AI"}
+        </button>
+
+        <label>
+          Name<br />
+          <input
+            value={fields.name}
+            onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
+          />
+        </label>
+
+        <label>
+          SKU<br />
+          <input
+            value={fields.sku}
+            onChange={(e) => setFields((f) => ({ ...f, sku: e.target.value }))}
+          />
+        </label>
+
+        <label>
+          Category<br />
+          <input
+            value={fields.category}
+            onChange={(e) => setFields((f) => ({ ...f, category: e.target.value }))}
+          />
+        </label>
+
+        <label>
+          Specs<br />
+          <textarea
+            value={fields.specs}
+            onChange={(e) => setFields((f) => ({ ...f, specs: e.target.value }))}
+            rows={3}
+          />
+        </label>
+
+        <label>
           Description<br />
           <textarea
             value={fields.description}
-            onChange={(e) =>
-              setFields((f) => ({ ...f, description: e.target.value }))
-            }
+            onChange={(e) => setFields((f) => ({ ...f, description: e.target.value }))}
             rows={6}
           />
         </label>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            onClick={handleDescribe}
-            disabled={busy || !fields.image_url}
-          >
-            {busy ? "Working..." : "Generate with AI"}
-          </button>
-          <button type="submit" disabled={busy || !fields.name.trim()}>
-            Save Product
-          </button>
-        </div>
+        <button type="submit" disabled={busy}>
+          Save Product
+        </button>
 
         {msg && (
           <div style={{ padding: 8, background: "#f7f7f7", border: "1px solid #eee" }}>
