@@ -85,76 +85,156 @@ export default function Products() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Products Catalog</h1>
-              <p className="text-gray-600 mt-1">
+              <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#111827', margin: 0 }}>
+                Products Catalog
+              </h1>
+              <p style={{ color: '#6b7280', marginTop: '4px', margin: 0 }}>
                 {products.length} {products.length === 1 ? 'product' : 'products'} available
               </p>
             </div>
-            <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-              ✓ NEW GRID LAYOUT
+            <span style={{
+              backgroundColor: '#dcfce7',
+              color: '#166534',
+              padding: '8px 12px',
+              borderRadius: '20px',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              ✓ NEW GRID LAYOUT - FIXED IMAGES
             </span>
           </div>
         </div>
       </div>
 
       {/* Products Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 16px' }}>
         {products.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="bg-white rounded-lg shadow-sm p-8">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Found</h3>
-              <p className="text-gray-600">Check back later for new products.</p>
+          <div style={{ textAlign: 'center', paddingTop: '48px', paddingBottom: '48px' }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '32px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: '500', color: '#111827', marginBottom: '8px' }}>No Products Found</h3>
+              <p style={{ color: '#6b7280' }}>Check back later for new products.</p>
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '24px'
+          }}>
             {products.map((product) => (
-              <div key={product.id} className="bg-white rounded-lg shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200">
-                {/* Product Image */}
-                <div className="relative aspect-square overflow-hidden bg-gray-100">
+              <div key={product.id} style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                overflow: 'hidden',
+                border: '1px solid #e5e7eb',
+                transition: 'box-shadow 0.2s',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+              }}>
+                
+                {/* Product Image - FIXED SIZE */}
+                <div style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: '250px',
+                  overflow: 'hidden',
+                  backgroundColor: '#f3f4f6'
+                }}>
                   <img
                     src={getProductImage(product)}
                     alt={product.name || "Product"}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.2s'
+                    }}
                     onError={(e) => {
                       e.target.src = "/placeholder.png";
                     }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'scale(1)';
+                    }}
                   />
                   {product.discountPrice && product.discountPrice < product.price && (
-                    <span className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-medium">
+                    <span style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '500'
+                    }}>
                       Sale
                     </span>
                   )}
                 </div>
 
-                <div className="p-4">
-                  <div className="mb-2">
-                    <h3 className="font-semibold text-lg leading-tight mb-1">
+                <div style={{ padding: '16px' }}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <h3 style={{
+                      fontWeight: '600',
+                      fontSize: '18px',
+                      lineHeight: '1.2',
+                      marginBottom: '4px',
+                      color: '#111827'
+                    }}>
                       {product.name || "Unnamed Product"}
                     </h3>
                     {product.category && (
-                      <span className="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">
+                      <span style={{
+                        display: 'inline-block',
+                        backgroundColor: '#f3f4f6',
+                        color: '#374151',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px'
+                      }}>
                         {product.category}
                       </span>
                     )}
                   </div>
 
                   {/* Price */}
-                  <div className="mb-3">
+                  <div style={{ marginBottom: '12px' }}>
                     {product.discountPrice && product.discountPrice < product.price ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl font-bold text-green-600">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          fontSize: '20px',
+                          fontWeight: 'bold',
+                          color: '#059669'
+                        }}>
                           ${formatPrice(product.discountPrice)}
                         </span>
-                        <span className="text-sm text-gray-500 line-through">
+                        <span style={{
+                          fontSize: '14px',
+                          color: '#6b7280',
+                          textDecoration: 'line-through'
+                        }}>
                           ${formatPrice(product.price)}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-xl font-bold text-gray-900">
+                      <span style={{
+                        fontSize: '20px',
+                        fontWeight: 'bold',
+                        color: '#111827'
+                      }}>
                         ${formatPrice(product.price)}
                       </span>
                     )}
@@ -162,21 +242,51 @@ export default function Products() {
 
                   {/* SKU */}
                   {product.sku && (
-                    <p className="text-xs text-gray-500 mb-2">
+                    <p style={{
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      marginBottom: '8px'
+                    }}>
                       SKU: {product.sku}
                     </p>
                   )}
 
                   {/* Short Description */}
                   {product.description && (
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                    <p style={{
+                      fontSize: '14px',
+                      color: '#6b7280',
+                      marginBottom: '12px',
+                      lineHeight: '1.4',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
+                    }}>
                       {product.description.replace(/\*\*/g, '').slice(0, 100)}...
                     </p>
                   )}
 
                   <button
                     onClick={() => setSelectedProduct(product)}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors"
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#2563eb',
+                      color: 'white',
+                      padding: '10px 16px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = '#1d4ed8';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = '#2563eb';
+                    }}
                   >
                     View Details
                   </button>
@@ -187,7 +297,7 @@ export default function Products() {
         )}
       </div>
 
-      {/* Product Detail Modal - keeping the existing modal code */}
+      {/* Product Detail Modal */}
       <Dialog
         open={!!selectedProduct}
         onOpenChange={() => setSelectedProduct(null)}
