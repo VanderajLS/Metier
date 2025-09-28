@@ -3,11 +3,14 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 import ComingSoon from "./pages/ComingSoon";
-import AdminProductUpload from "./pages/AdminProductUpload"; // your admin page
+import AdminProductUpload from "./pages/AdminProductUpload";
+import Products from "./pages/Products"; // ✅ new import
 
 // Simple gate: only allow access if session flag is present
 function Protected({ children }) {
-  const ok = typeof window !== "undefined" && sessionStorage.getItem("metier_auth") === "ok";
+  const ok =
+    typeof window !== "undefined" &&
+    sessionStorage.getItem("metier_auth") === "ok";
   return ok ? children : <Navigate to="/" replace />;
 }
 
@@ -15,10 +18,11 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Public placeholder */}
+        {/* Public routes */}
         <Route path="/" element={<ComingSoon />} />
+        <Route path="/products" element={<Products />} /> {/* ✅ new route */}
 
-        {/* Everything below is hidden behind the passcode */}
+        {/* Protected admin route */}
         <Route
           path="/admin"
           element={
@@ -28,18 +32,7 @@ export default function App() {
           }
         />
 
-        {/* Add more protected routes here as needed, e.g.:
-        <Route
-          path="/dashboard"
-          element={
-            <Protected>
-              <Dashboard />
-            </Protected>
-          }
-        />
-        */}
-
-        {/* Fallback */}
+        {/* Fallback: redirect unknown routes */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
