@@ -11,6 +11,7 @@ export default function AdminProductUpload() {
     sku: "",
     category: "",
     price: "",
+    discountPrice: "",
     inventory: "",
     specs: "",
     description: "",
@@ -18,6 +19,7 @@ export default function AdminProductUpload() {
   });
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState(""); // future admin prompt
 
   const API_BASE =
     import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
@@ -146,6 +148,7 @@ export default function AdminProductUpload() {
         sku: "",
         category: "",
         price: "",
+        discountPrice: "",
         inventory: "",
         specs: "",
         description: "",
@@ -155,6 +158,7 @@ export default function AdminProductUpload() {
       setProductFiles([]);
       setPreviewInfo("");
       setPreviewProducts([]);
+      setFeedback("");
     } catch (e) {
       setMsg(`Save error: ${e.message}`);
     } finally {
@@ -172,6 +176,7 @@ export default function AdminProductUpload() {
 
       <h1>Admin: Upload Product</h1>
       <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
+        {/* Description image */}
         <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
           <legend>Description Image</legend>
           <input
@@ -191,6 +196,7 @@ export default function AdminProductUpload() {
           )}
         </fieldset>
 
+        {/* Gallery images */}
         <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
           <legend>Product Images</legend>
           <input
@@ -213,13 +219,24 @@ export default function AdminProductUpload() {
           </div>
         </fieldset>
 
+        {/* Pricing */}
         <label>
-          Price<br />
+          Standard Price<br />
           <input
             type="number"
             step="0.01"
             value={fields.price}
             onChange={(e) => setFields((f) => ({ ...f, price: e.target.value }))}
+          />
+        </label>
+
+        <label>
+          Discount Price (optional)<br />
+          <input
+            type="number"
+            step="0.01"
+            value={fields.discountPrice}
+            onChange={(e) => setFields((f) => ({ ...f, discountPrice: e.target.value }))}
           />
         </label>
 
@@ -232,6 +249,7 @@ export default function AdminProductUpload() {
           />
         </label>
 
+        {/* AI */}
         <button
           type="button"
           onClick={handleDescribe}
@@ -281,6 +299,21 @@ export default function AdminProductUpload() {
             rows={6}
           />
         </label>
+
+        {/* Future: Admin Feedback Prompt */}
+        <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
+          <legend>Admin Feedback (future AI correction)</legend>
+          <textarea
+            placeholder="Suggest corrections for specs or description..."
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            rows={3}
+            style={{ width: "100%" }}
+          />
+          <small style={{ color: "#666" }}>
+            Not yet connected — will be used to refine AI output.
+          </small>
+        </fieldset>
 
         <button type="submit" disabled={busy}>
           Save Product
