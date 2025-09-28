@@ -2,8 +2,10 @@
 import React, { useState } from "react";
 
 export default function AdminProductUpload() {
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState("");
+  const [infoFile, setInfoFile] = useState(null);
+  const [productFiles, setProductFiles] = useState([]);
+  const [previewInfo, setPreviewInfo] = useState("");
+  const [previewProducts, setPreviewProducts] = useState([]);
   const [fields, setFields] = useState({
     name: "",
     sku: "",
@@ -18,38 +20,59 @@ export default function AdminProductUpload() {
 
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
 
-  async function handleUpload() {
-    if (!file) return;
+  async function presignAndUpload(file, folder) {
+    const res = await fetch(`${API_BASE}/api/admin/images/presign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType: file.type,
+        folder
+      }),
+    });
+    if (!res.ok) throw new Error("Presign request failed");
+    const { url, fields, public_url } = await res.json();
 
+    const formData = new FormData();
+    Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
+    formData.append("file", file);
+
+    const uploadRes = await fetch(url, { method: "POST", body: formData });
+    if (!uploadRes.ok) throw new Error("Upload failed");
+
+    return public_url;
+  }
+
+  async function handleInfoUpload() {
+    if (!infoFile) return;
     try {
       setBusy(true);
-      setMsg("Requesting presign...");
-
-      // Step 1: get presign
-      const res = await fetch(`${API_BASE}/api/admin/images/presign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          contentType: file.type,
-          folder: "products/test"
-        }),
-      });
-      const { url, fields: s3Fields, public_url } = await res.json();
-
-      // Step 2: upload to R2
-      const formData = new FormData();
-      Object.entries(s3Fields).forEach(([k, v]) => formData.append(k, v));
-      formData.append("file", file);
-
-      const uploadRes = await fetch(url, { method: "POST", body: formData });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-
-      setPreview(public_url);
-      setFields(f => ({ ...f, image_url: public_url }));
-      setMsg("Image uploaded!");
+      setMsg("Uploading info image...");
+      const url = await presignAndUpload(infoFile, "products/info");
+      setPreviewInfo(url);
+      setFields(f => ({ ...f, image_url: url }));
+      setMsg("Info image uploaded!");
     } catch (e) {
-      setMsg(`Upload error: ${e.message}`);
+      setMsg(`Info upload error: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleProductUploads() {
+    if (!productFiles.length) return;
+    try {
+      setBusy(true);
+      setMsg("Uploading product images...");
+      const urls = [];
+      for (const file of productFiles) {
+        const url = await presignAndUpload(file, "products/images");
+        urls.push(url);
+      }
+      setPreviewProducts(urls);
+      setMsg("Product images uploaded!");
+    } catch (e) {
+      setMsg(`Product images error: ${e.message}`);
     } finally {
       setBusy(false);
     }
@@ -85,13 +108,18 @@ export default function AdminProductUpload() {
       const res = await fetch(`${API_BASE}/api/admin/products`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fields),
+        body: JSON.stringify({
+          ...fields,
+          product_images: previewProducts
+        }),
       });
       if (!res.ok) throw new Error("Save failed");
       setMsg("Product saved! Check your catalog.");
       setFields({ name: "", sku: "", category: "", price: "", specs: "", description: "", image_url: "" });
-      setFile(null);
-      setPreview("");
+      setInfoFile(null);
+      setProductFiles([]);
+      setPreviewInfo("");
+      setPreviewProducts([]);
     } catch (e) {
       setMsg(`Save error: ${e.message}`);
     } finally {
@@ -126,19 +154,26 @@ export default function AdminProductUpload() {
         </label>
 
         <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
-          <legend>Image</legend>
-          <input type="file" accept="image/*" onChange={e=>setFile(e.target.files?.[0]||null)} />
-          <button type="button" onClick={handleUpload} disabled={!file || busy}>
-            {busy ? "Uploading..." : "Upload to R2"}
+          <legend>Info Image (for AI)</legend>
+          <input type="file" accept="image/*" onChange={e=>setInfoFile(e.target.files?.[0]||null)} />
+          <button type="button" onClick={handleInfoUpload} disabled={!infoFile || busy}>
+            {busy ? "Uploading..." : "Upload Info Image"}
           </button>
+          {previewInfo && <img src={previewInfo} alt="info preview" style={{ maxWidth: "100%", marginTop: 10 }} />}
         </fieldset>
 
-        {preview && (
-          <>
-            <h4>Preview:</h4>
-            <img src={preview} alt="preview" style={{ maxWidth: "100%" }} />
-          </>
-        )}
+        <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
+          <legend>Product Images (gallery)</legend>
+          <input type="file" accept="image/*" multiple onChange={e=>setProductFiles(Array.from(e.target.files||[]))} />
+          <button type="button" onClick={handleProductUploads} disabled={!productFiles.length || busy}>
+            {busy ? "Uploading..." : "Upload Product Images"}
+          </button>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
+            {previewProducts.map((url, i)=>(
+              <img key={i} src={url} alt="prod preview" style={{ width:120 }} />
+            ))}
+          </div>
+        </fieldset>
 
         <label>
           Description<br/>
