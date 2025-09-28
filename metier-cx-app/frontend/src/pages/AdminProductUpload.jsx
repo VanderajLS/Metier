@@ -1,32 +1,74 @@
-// metier-cx-app/frontend/src/pages/AdminProductUpload.jsx
+// src/pages/AdminProductUpload.jsx
 import React, { useState } from "react";
-import { aiDescribe, createProductJson, uploadProductWithImage } from "../services/adminApi";
 
 export default function AdminProductUpload() {
-  const [name, setName] = useState("");
-  const [sku, setSku] = useState("");
-  const [category, setCategory] = useState("");
-  const [price, setPrice] = useState("");
-  const [specs, setSpecs] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [file, setFile] = useState(null);
-  const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState("");
+  const [fields, setFields] = useState({
+    name: "",
+    sku: "",
+    category: "",
+    price: "",
+    specs: "",
+    description: "",
+    image_url: ""
+  });
   const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const useFile = Boolean(file);
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
 
-  async function handleGenerate() {
+  async function handleUpload() {
+    if (!file) return;
+
     try {
-      setBusy(true); setMsg("Generating with AI...");
-      const data = await aiDescribe({
-        name, sku, category,
-        price: price ? Number(price) : undefined,
-        image_url: imageUrl || undefined,
-        specs: specs || undefined,
+      setBusy(true);
+      setMsg("Requesting presign...");
+
+      // Step 1: get presign
+      const res = await fetch(`${API_BASE}/api/admin/images/presign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type,
+          folder: "products/test"
+        }),
       });
-      setDescription(data.description || "");
-      setMsg("Generated.");
+      const { url, fields: s3Fields, public_url } = await res.json();
+
+      // Step 2: upload to R2
+      const formData = new FormData();
+      Object.entries(s3Fields).forEach(([k, v]) => formData.append(k, v));
+      formData.append("file", file);
+
+      const uploadRes = await fetch(url, { method: "POST", body: formData });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+
+      setPreview(public_url);
+      setFields(f => ({ ...f, image_url: public_url }));
+      setMsg("Image uploaded!");
+    } catch (e) {
+      setMsg(`Upload error: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDescribe() {
+    try {
+      setBusy(true);
+      setMsg("Generating description with AI...");
+      const res = await fetch(`${API_BASE}/api/admin/ai/describe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      const data = await res.json();
+      if (data.description) {
+        setFields(f => ({ ...f, description: data.description }));
+      }
+      setMsg("AI description generated.");
     } catch (e) {
       setMsg(`AI error: ${e.message}`);
     } finally {
@@ -34,36 +76,22 @@ export default function AdminProductUpload() {
     }
   }
 
-  async function handleSubmit(e) {
+  async function handleSave(e) {
     e.preventDefault();
-    if (!name.trim()) return setMsg("Name is required.");
+    if (!fields.name.trim()) return setMsg("Name is required.");
     try {
-      setBusy(true); setMsg("Saving product...");
-      if (useFile) {
-        await uploadProductWithImage({
-          name,
-          sku,
-          category,
-          price: price ? Number(price) : 0,
-          description: description || "",
-          specs,
-          file,
-        });
-      } else {
-        await createProductJson({
-          name,
-          sku,
-          category,
-          price: price ? Number(price) : 0,
-          image_url: imageUrl || "",
-          description: description || "",
-          specs,
-        });
-      }
-      setMsg("Saved. Check your catalog!");
-      // quick reset
-      setName(""); setSku(""); setCategory(""); setPrice("");
-      setSpecs(""); setImageUrl(""); setFile(null); setDescription("");
+      setBusy(true);
+      setMsg("Saving product...");
+      const res = await fetch(`${API_BASE}/api/admin/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setMsg("Product saved! Check your catalog.");
+      setFields({ name: "", sku: "", category: "", price: "", specs: "", description: "", image_url: "" });
+      setFile(null);
+      setPreview("");
     } catch (e) {
       setMsg(`Save error: ${e.message}`);
     } finally {
@@ -72,62 +100,60 @@ export default function AdminProductUpload() {
   }
 
   return (
-    <div style={{maxWidth: 900, margin: "40px auto", padding: 16}}>
-      <h1 style={{marginBottom: 12}}>Admin: Upload Product</h1>
-      <form onSubmit={handleSubmit} style={{display: "grid", gap: 12}}>
+    <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
+      <h1>Admin: Upload Product</h1>
+      <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
         <label>
           Name*<br/>
-          <input value={name} onChange={e=>setName(e.target.value)} required style={{width:"100%"}}/>
+          <input value={fields.name} onChange={e=>setFields(f=>({...f, name:e.target.value}))} required />
         </label>
         <label>
           SKU<br/>
-          <input value={sku} onChange={e=>setSku(e.target.value)} style={{width:"100%"}}/>
+          <input value={fields.sku} onChange={e=>setFields(f=>({...f, sku:e.target.value}))} />
         </label>
         <label>
           Category<br/>
-          <input value={category} onChange={e=>setCategory(e.target.value)} style={{width:"100%"}}/>
+          <input value={fields.category} onChange={e=>setFields(f=>({...f, category:e.target.value}))} />
         </label>
         <label>
           Price<br/>
-          <input type="number" step="0.01" value={price} onChange={e=>setPrice(e.target.value)} style={{width:"100%"}}/>
+          <input type="number" step="0.01" value={fields.price}
+            onChange={e=>setFields(f=>({...f, price:e.target.value}))} />
         </label>
         <label>
-          Specs/Notes (optional)<br/>
-          <textarea value={specs} onChange={e=>setSpecs(e.target.value)} rows={3} style={{width:"100%"}} />
+          Specs/Notes<br/>
+          <textarea value={fields.specs} onChange={e=>setFields(f=>({...f, specs:e.target.value}))} rows={3}/>
         </label>
 
-        <fieldset style={{border: "1px solid #ddd", padding: 12}}>
+        <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
           <legend>Image</legend>
-          <div style={{display: "grid", gap: 8}}>
-            <label>
-              Image URL (preferred for production)<br/>
-              <input value={imageUrl} onChange={e=>setImageUrl(e.target.value)} placeholder="https://..." style={{width:"100%"}}/>
-            </label>
-            <div style={{textAlign:"center"}}>— or —</div>
-            <label>
-              Upload file (ephemeral on Railway)<br/>
-              <input type="file" accept="image/*" onChange={e=>setFile(e.target.files?.[0] || null)} />
-            </label>
-          </div>
+          <input type="file" accept="image/*" onChange={e=>setFile(e.target.files?.[0]||null)} />
+          <button type="button" onClick={handleUpload} disabled={!file || busy}>
+            {busy ? "Uploading..." : "Upload to R2"}
+          </button>
         </fieldset>
 
+        {preview && (
+          <>
+            <h4>Preview:</h4>
+            <img src={preview} alt="preview" style={{ maxWidth: "100%" }} />
+          </>
+        )}
+
         <label>
-          Description (leave blank to generate)<br/>
-          <textarea value={description} onChange={e=>setDescription(e.target.value)} rows={6} style={{width:"100%"}}/>
+          Description<br/>
+          <textarea value={fields.description} onChange={e=>setFields(f=>({...f, description:e.target.value}))} rows={6}/>
         </label>
 
-        <div style={{display:"flex", gap: 8}}>
-          <button type="button" onClick={handleGenerate} disabled={busy || !name.trim()}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" onClick={handleDescribe} disabled={busy || !fields.image_url}>
             {busy ? "Working..." : "Generate with AI"}
           </button>
-          <button type="submit" disabled={busy || !name.trim()}>Save Product</button>
+          <button type="submit" disabled={busy || !fields.name.trim()}>Save Product</button>
         </div>
 
-        {msg && <div style={{padding:8, background:"#f7f7f7", border:"1px solid #eee"}}>{msg}</div>}
+        {msg && <div style={{ padding: 8, background: "#f7f7f7", border: "1px solid #eee" }}>{msg}</div>}
       </form>
-      <p style={{marginTop:16, color:"#666", fontSize:13}}>
-        Tip: for persistent images, host on S3/R2/etc. and paste the public URL. File uploads to Railway are best for demos.
-      </p>
     </div>
   );
 }
