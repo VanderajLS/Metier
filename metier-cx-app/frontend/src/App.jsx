@@ -1,32 +1,27 @@
-// metier-cx-app/frontend/src/App.jsx
+// frontend/src/App.jsx
 
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from "react-router-dom";
 
 // Pages
 import AdminProductUpload from "./pages/AdminProductUpload";
 import Products from "./pages/Products";
 
-// Minimal Home page until you add a real landing/catalog
+// Components
+import ProductDetailPage from "./components/ProductDetailPage";
+
+// Simple home page (placeholder)
 function Home() {
   return (
-    <div
-      style={{
-        maxWidth: 900,
-        margin: "40px auto",
-        padding: 16,
-        lineHeight: 1.5,
-      }}
-    >
+    <div style={{ maxWidth: 900, margin: "40px auto", padding: 16, lineHeight: 1.5 }}>
       <h1 className="text-3xl font-bold mb-4">Metier CX</h1>
       <p className="mb-4">
-        This is a placeholder Home page to keep the site visible while we wire
-        routes.
+        This is a placeholder Home page. Replace with your landing/catalog later.
       </p>
       <ul className="list-disc pl-6 space-y-2">
         <li>
           <Link to="/admin" className="text-blue-600 hover:underline">
-            Go to Admin Product Upload
+            Admin Product Upload
           </Link>
         </li>
         <li>
@@ -35,15 +30,11 @@ function Home() {
           </Link>
         </li>
       </ul>
-      <p style={{ color: "#666", fontSize: 13, marginTop: 20 }}>
-        When you’re ready, replace this Home with your real landing or catalog
-        route.
-      </p>
     </div>
   );
 }
 
-// Fallback Not Found page
+// Fallback 404 page
 function NotFound() {
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
@@ -61,19 +52,19 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Home route */}
+        {/* Home */}
         <Route path="/" element={<Home />} />
 
-        {/* Admin product upload page */}
+        {/* Admin upload page */}
         <Route path="/admin" element={<AdminProductUpload />} />
 
-        {/* Product catalog (new grid + modal) */}
+        {/* Product catalog (grid + modal) */}
         <Route path="/products" element={<Products />} />
 
-        {/* Later you can add product detail pages here, e.g.:
-            <Route path="/products/:id" element={<ProductDetailPage />} /> */}
+        {/* Future: Product detail page */}
+        <Route path="/products/:id" element={<ProductDetailPage />} />
 
-        {/* 404 fallback */}
+        {/* Fallback */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
