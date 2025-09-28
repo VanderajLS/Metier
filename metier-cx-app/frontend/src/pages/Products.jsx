@@ -1,4 +1,3 @@
-// src/pages/Products.jsx
 import React, { useEffect, useState } from "react";
 
 export default function Products() {
@@ -13,7 +12,7 @@ export default function Products() {
     async function loadProducts() {
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/api/products`);
+        const res = await fetch(`${API_BASE}/api/admin/public`); // ✅ fixed route
         if (!res.ok) throw new Error("Failed to fetch products");
         const data = await res.json();
         setProducts(data);
@@ -65,14 +64,28 @@ export default function Products() {
                   }}
                 />
               )}
-              <h3 style={{ margin: "0 0 8px" }}>{p.name}</h3>
-              <p style={{ margin: "0 0 8px", color: "#555" }}>
-                <strong>SKU:</strong> {p.sku || "N/A"}
+              <h3 style={{ margin: "0 0 8px" }}>{p.name || "Unnamed product"}</h3>
+              {p.sku && (
+                <p style={{ margin: "0 0 8px", color: "#555" }}>
+                  <strong>SKU:</strong> {p.sku}
+                </p>
+              )}
+              {p.category && (
+                <p style={{ margin: "0 0 8px", color: "#777" }}>{p.category}</p>
+              )}
+              {p.price && (
+                <p style={{ margin: "0 0 8px", color: "#333" }}>
+                  ${parseFloat(p.price).toFixed(2)}
+                </p>
+              )}
+              {p.inventory && (
+                <p style={{ margin: "0 0 8px", color: "#555" }}>
+                  <strong>In Stock:</strong> {p.inventory}
+                </p>
+              )}
+              <p style={{ fontSize: 14, color: "#444" }}>
+                {p.description || "No description yet."}
               </p>
-              <p style={{ margin: "0 0 8px", color: "#777" }}>
-                {p.category} — ${p.price}
-              </p>
-              <p style={{ fontSize: 14, color: "#444" }}>{p.description}</p>
             </div>
           ))}
         </div>
