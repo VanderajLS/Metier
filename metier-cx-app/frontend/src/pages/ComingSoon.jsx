@@ -2,7 +2,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const PASS = (import.meta?.env?.VITE_SITE_PASSCODE || "").trim();
+// TEMP: hardcoded passcode for testing
+const PASS = "metierlab";
 
 export default function ComingSoon() {
   const navigate = useNavigate();
