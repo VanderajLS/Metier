@@ -18,27 +18,29 @@ export default function AdminProductUpload() {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
-console.log("🛰️ API_BASE in build:", API_BASE);
+  const API_BASE =
+    import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
 
   async function presignAndUpload(file, folder) {
-    const res = await fetch(`${API_BASE}/api/admin/images/presign`, {
+    // Step 1: request presign
+    const presignRes = await fetch(`${API_BASE}/api/admin/images/presign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fileName: file.name,
         contentType: file.type,
-        folder
+        folder,
       }),
     });
-    if (!res.ok) throw new Error("Presign request failed");
-    const { url, fields, public_url } = await res.json();
+    if (!presignRes.ok) throw new Error("Presign request failed");
+    const { upload_url, public_url } = await presignRes.json();
 
-    const formData = new FormData();
-    Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
-    formData.append("file", file);
-
-    const uploadRes = await fetch(url, { method: "POST", body: formData });
+    // Step 2: PUT file directly to R2
+    const uploadRes = await fetch(upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
     if (!uploadRes.ok) throw new Error("Upload failed");
 
     return public_url;
@@ -51,7 +53,7 @@ console.log("🛰️ API_BASE in build:", API_BASE);
       setMsg("Uploading info image...");
       const url = await presignAndUpload(infoFile, "products/info");
       setPreviewInfo(url);
-      setFields(f => ({ ...f, image_url: url }));
+      setFields((f) => ({ ...f, image_url: url }));
       setMsg("Info image uploaded!");
     } catch (e) {
       setMsg(`Info upload error: ${e.message}`);
@@ -90,7 +92,7 @@ console.log("🛰️ API_BASE in build:", API_BASE);
       });
       const data = await res.json();
       if (data.description) {
-        setFields(f => ({ ...f, description: data.description }));
+        setFields((f) => ({ ...f, description: data.description }));
       }
       setMsg("AI description generated.");
     } catch (e) {
@@ -111,12 +113,20 @@ console.log("🛰️ API_BASE in build:", API_BASE);
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...fields,
-          product_images: previewProducts
+          product_images: previewProducts,
         }),
       });
       if (!res.ok) throw new Error("Save failed");
       setMsg("Product saved! Check your catalog.");
-      setFields({ name: "", sku: "", category: "", price: "", specs: "", description: "", image_url: "" });
+      setFields({
+        name: "",
+        sku: "",
+        category: "",
+        price: "",
+        specs: "",
+        description: "",
+        image_url: "",
+      });
       setInfoFile(null);
       setProductFiles([]);
       setPreviewInfo("");
@@ -133,62 +143,128 @@ console.log("🛰️ API_BASE in build:", API_BASE);
       <h1>Admin: Upload Product</h1>
       <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
         <label>
-          Name*<br/>
-          <input value={fields.name} onChange={e=>setFields(f=>({...f, name:e.target.value}))} required />
+          Name*<br />
+          <input
+            value={fields.name}
+            onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
+            required
+          />
         </label>
         <label>
-          SKU<br/>
-          <input value={fields.sku} onChange={e=>setFields(f=>({...f, sku:e.target.value}))} />
+          SKU<br />
+          <input
+            value={fields.sku}
+            onChange={(e) => setFields((f) => ({ ...f, sku: e.target.value }))}
+          />
         </label>
         <label>
-          Category<br/>
-          <input value={fields.category} onChange={e=>setFields(f=>({...f, category:e.target.value}))} />
+          Category<br />
+          <input
+            value={fields.category}
+            onChange={(e) =>
+              setFields((f) => ({ ...f, category: e.target.value }))
+            }
+          />
         </label>
         <label>
-          Price<br/>
-          <input type="number" step="0.01" value={fields.price}
-            onChange={e=>setFields(f=>({...f, price:e.target.value}))} />
+          Price<br />
+          <input
+            type="number"
+            step="0.01"
+            value={fields.price}
+            onChange={(e) =>
+              setFields((f) => ({ ...f, price: e.target.value }))
+            }
+          />
         </label>
         <label>
-          Specs/Notes<br/>
-          <textarea value={fields.specs} onChange={e=>setFields(f=>({...f, specs:e.target.value}))} rows={3}/>
+          Specs/Notes<br />
+          <textarea
+            value={fields.specs}
+            onChange={(e) =>
+              setFields((f) => ({ ...f, specs: e.target.value }))
+            }
+            rows={3}
+          />
         </label>
 
         <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
           <legend>Info Image (for AI)</legend>
-          <input type="file" accept="image/*" onChange={e=>setInfoFile(e.target.files?.[0]||null)} />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setInfoFile(e.target.files?.[0] || null)}
+          />
           <button type="button" onClick={handleInfoUpload} disabled={!infoFile || busy}>
             {busy ? "Uploading..." : "Upload Info Image"}
           </button>
-          {previewInfo && <img src={previewInfo} alt="info preview" style={{ maxWidth: "100%", marginTop: 10 }} />}
+          {previewInfo && (
+            <img
+              src={previewInfo}
+              alt="info preview"
+              style={{ maxWidth: "100%", marginTop: 10 }}
+            />
+          )}
         </fieldset>
 
         <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
           <legend>Product Images (gallery)</legend>
-          <input type="file" accept="image/*" multiple onChange={e=>setProductFiles(Array.from(e.target.files||[]))} />
-          <button type="button" onClick={handleProductUploads} disabled={!productFiles.length || busy}>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => setProductFiles(Array.from(e.target.files || []))}
+          />
+          <button
+            type="button"
+            onClick={handleProductUploads}
+            disabled={!productFiles.length || busy}
+          >
             {busy ? "Uploading..." : "Upload Product Images"}
           </button>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
-            {previewProducts.map((url, i)=>(
-              <img key={i} src={url} alt="prod preview" style={{ width:120 }} />
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginTop: 10,
+            }}
+          >
+            {previewProducts.map((url, i) => (
+              <img key={i} src={url} alt="prod preview" style={{ width: 120 }} />
             ))}
           </div>
         </fieldset>
 
         <label>
-          Description<br/>
-          <textarea value={fields.description} onChange={e=>setFields(f=>({...f, description:e.target.value}))} rows={6}/>
+          Description<br />
+          <textarea
+            value={fields.description}
+            onChange={(e) =>
+              setFields((f) => ({ ...f, description: e.target.value }))
+            }
+            rows={6}
+          />
         </label>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={handleDescribe} disabled={busy || !fields.image_url}>
+          <button
+            type="button"
+            onClick={handleDescribe}
+            disabled={busy || !fields.image_url}
+          >
             {busy ? "Working..." : "Generate with AI"}
           </button>
-          <button type="submit" disabled={busy || !fields.name.trim()}>Save Product</button>
+          <button type="submit" disabled={busy || !fields.name.trim()}>
+            Save Product
+          </button>
         </div>
 
-        {msg && <div style={{ padding: 8, background: "#f7f7f7", border: "1px solid #eee" }}>{msg}</div>}
+        {msg && (
+          <div style={{ padding: 8, background: "#f7f7f7", border: "1px solid #eee" }}>
+            {msg}
+          </div>
+        )}
       </form>
     </div>
   );
