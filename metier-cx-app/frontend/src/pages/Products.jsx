@@ -1,3 +1,5 @@
+<h1 style={{ color: "red" }}>DEBUG: New Products Page</h1>
+
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
