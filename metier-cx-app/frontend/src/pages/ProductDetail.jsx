@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
-import { getUserRole, isAdmin, ROLES } from "../utils/auth";
 
 export default function ProductDetail() {
   const { productId } = useParams();
@@ -9,28 +7,32 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  
-  // Get user info
-  const userRole = getUserRole();
-  const isUserAdmin = isAdmin();
+  const [selectedImage, setSelectedImage] = useState(0);
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
+  const API_BASE =
+    import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
+
+  // Check if user is admin - simplified version that doesn't rely on auth.js
+  const isAdmin = () => {
+    const role = sessionStorage.getItem("userRole");
+    return role === "admin";
+  };
 
   useEffect(() => {
     async function loadProduct() {
       try {
         setLoading(true);
         setError("");
-        
-        // Fetch all products and find the one with matching ID
         const res = await fetch(`${API_BASE}/api/admin/public`);
         if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`);
+        const data = await res.json();
         
-        const products = await res.json();
-        const foundProduct = products.find(p => p.id === parseInt(productId));
-        
+        // Find the specific product by ID
+        const foundProduct = Array.isArray(data) 
+          ? data.find(p => p.id === parseInt(productId) || p.id === productId)
+          : null;
+          
         if (!foundProduct) {
           throw new Error("Product not found");
         }
@@ -47,7 +49,7 @@ export default function ProductDetail() {
     if (productId) {
       loadProduct();
     }
-  }, [productId, API_BASE]);
+  }, [API_BASE, productId]);
 
   const formatPrice = (price) => {
     const numPrice = parseFloat(price);
@@ -59,15 +61,17 @@ export default function ProductDetail() {
     
     const images = [];
     
-    if (product.product_images && product.product_images.length > 0) {
-      images.push(...product.product_images);
-    }
-    
-    if (product.image_url && !images.includes(product.image_url)) {
+    // Add main product image if available
+    if (product.image_url) {
       images.push(product.image_url);
     }
     
-    // Ensure we have at least one image
+    // Add product gallery images if available
+    if (product.product_images && Array.isArray(product.product_images)) {
+      images.push(...product.product_images);
+    }
+    
+    // If no images, add placeholder
     if (images.length === 0) {
       images.push("/placeholder.png");
     }
@@ -75,8 +79,8 @@ export default function ProductDetail() {
     return images;
   };
 
-  const handleQuantityChange = (change) => {
-    const newQuantity = Math.max(1, quantity + change);
+  const handleQuantityChange = (amount) => {
+    const newQuantity = Math.max(1, quantity + amount);
     setQuantity(newQuantity);
   };
 
@@ -116,6 +120,8 @@ export default function ProductDetail() {
                 cursor: 'pointer',
                 transition: 'background-color 0.2s'
               }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#f9fafb'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
             >
               Back to Products
             </button>
@@ -142,6 +148,8 @@ export default function ProductDetail() {
                 cursor: 'pointer',
                 transition: 'background-color 0.2s'
               }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#f9fafb'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
             >
               Back to Products
             </button>
@@ -152,10 +160,11 @@ export default function ProductDetail() {
   }
 
   const productImages = getProductImages(product);
-
+  const currentImage = productImages[selectedImage] || "/placeholder.png";
+  
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
-      {/* Navigation Header */}
+      {/* Header Navigation */}
       <nav style={{ backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderBottom: '1px solid #e5e7eb' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
@@ -167,49 +176,40 @@ export default function ProductDetail() {
                 <Link to="/products" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
                   Products
                 </Link>
-                {isUserAdmin && (
-                  <>
-                    <Link to="/admin" style={{ color: '#6b7280', textDecoration: 'none' }}>
-                      Admin Upload
-                    </Link>
-                    <Link to="/admin/orders" style={{ color: '#6b7280', textDecoration: 'none' }}>
-                      Orders
-                    </Link>
-                  </>
-                )}
-                {userRole === ROLES.CUSTOMER && (
-                  <Link to="/cart" style={{ color: '#6b7280', textDecoration: 'none' }}>
-                    Cart
+                {isAdmin() && (
+                  <Link to="/admin" style={{ color: '#6b7280', textDecoration: 'none' }}>
+                    Admin Upload
                   </Link>
                 )}
+                <Link to="/orders" style={{ color: '#6b7280', textDecoration: 'none' }}>
+                  Orders
+                </Link>
               </div>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Back to Products */}
-      <div style={{ backgroundColor: 'white', borderBottom: '1px solid #e5e7eb' }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '12px 16px' }}>
-          <Link 
-            to="/products" 
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px', 
-              color: '#4b5563', 
-              textDecoration: 'none',
-              fontSize: '14px'
-            }}
-          >
-            <span>←</span> Back to Products
-          </Link>
-        </div>
+      {/* Back Button */}
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '16px' }}>
+        <Link 
+          to="/products" 
+          style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            color: '#6b7280', 
+            textDecoration: 'none',
+            fontSize: '14px',
+            fontWeight: '500'
+          }}
+        >
+          <span style={{ marginRight: '4px' }}>←</span> Back to Products
+        </Link>
       </div>
 
       {/* Breadcrumb Navigation */}
-      <div style={{ backgroundColor: '#f3f4f6', borderBottom: '1px solid #e5e7eb' }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '8px 16px' }}>
+      <div style={{ backgroundColor: '#f3f4f6', padding: '8px 0' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', fontSize: '14px', color: '#6b7280' }}>
             <Link to="/" style={{ color: '#6b7280', textDecoration: 'none' }}>Home</Link>
             <span style={{ margin: '0 8px' }}>/</span>
@@ -217,7 +217,9 @@ export default function ProductDetail() {
             {product.category && (
               <>
                 <span style={{ margin: '0 8px' }}>/</span>
-                <span>{product.category}</span>
+                <Link to={`/products?category=${product.category}`} style={{ color: '#6b7280', textDecoration: 'none' }}>
+                  {product.category}
+                </Link>
               </>
             )}
             <span style={{ margin: '0 8px' }}>/</span>
@@ -229,59 +231,55 @@ export default function ProductDetail() {
       {/* Product Detail Content */}
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 16px' }}>
         <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(1, minmax(0, 1fr))', 
-          gap: '32px',
-          '@media (min-width: 768px)': {
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))'
-          }
+          display: 'flex', 
+          flexDirection: 'row', 
+          gap: '48px',
+          flexWrap: 'wrap'
         }}>
-          {/* Product Images */}
-          <div>
-            {/* Main Image */}
+          {/* Left Column - Product Images */}
+          <div style={{ flex: '1', minWidth: '300px', maxWidth: '600px' }}>
+            {/* Main Product Image */}
             <div style={{ 
-              backgroundColor: 'white', 
-              border: '1px solid #e5e7eb', 
+              backgroundColor: 'white',
+              border: '1px solid #e5e7eb',
               borderRadius: '8px',
               padding: '16px',
               marginBottom: '16px',
-              height: '400px',
               display: 'flex',
+              justifyContent: 'center',
               alignItems: 'center',
-              justifyContent: 'center'
+              height: '400px'
             }}>
               <img 
-                src={productImages[selectedImage]} 
-                alt={product.name}
+                src={currentImage} 
+                alt={product.name} 
                 style={{
                   maxWidth: '100%',
                   maxHeight: '100%',
                   objectFit: 'contain'
                 }}
-                onError={(e) => {
-                  e.target.src = "/placeholder.png";
-                }}
               />
             </div>
-            
-            {/* Thumbnail Images */}
+
+            {/* Thumbnail Gallery */}
             {productImages.length > 1 && (
               <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', 
-                gap: '8px' 
+                display: 'flex', 
+                gap: '8px',
+                flexWrap: 'wrap'
               }}>
                 {productImages.map((image, index) => (
-                  <button
+                  <div 
                     key={index}
                     onClick={() => setSelectedImage(index)}
                     style={{
-                      padding: '8px',
-                      border: index === selectedImage ? '2px solid #2563eb' : '1px solid #e5e7eb',
-                      borderRadius: '4px',
-                      backgroundColor: 'white',
-                      cursor: 'pointer',
+                      width: '80px',
                       height: '80px',
+                      border: selectedImage === index ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                      borderRadius: '4px',
+                      padding: '4px',
+                      cursor: 'pointer',
+                      backgroundColor: 'white',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
@@ -289,59 +287,77 @@ export default function ProductDetail() {
                   >
                     <img 
                       src={image} 
-                      alt={`View ${index + 1}`}
+                      alt={`${product.name} - View ${index + 1}`}
                       style={{
                         maxWidth: '100%',
                         maxHeight: '100%',
                         objectFit: 'contain'
                       }}
-                      onError={(e) => {
-                        e.target.src = "/placeholder.png";
-                      }}
                     />
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Product Information */}
-          <div>
-            {/* Product Name and SKU */}
-            <div style={{ marginBottom: '16px' }}>
-              <h1 style={{ fontSize: '32px', fontWeight: 'bold', color: '#111827', marginBottom: '8px' }}>
-                {product.name}
-              </h1>
-              {product.sku && (
-                <p style={{ fontSize: '14px', color: '#6b7280' }}>
-                  SKU: {product.sku}
-                </p>
-              )}
-            </div>
+          {/* Right Column - Product Details */}
+          <div style={{ flex: '1', minWidth: '300px' }}>
+            {/* Product Category */}
+            {product.category && (
+              <div style={{ marginBottom: '8px' }}>
+                <span style={{
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}>
+                  {product.category}
+                </span>
+              </div>
+            )}
+
+            {/* Product Name */}
+            <h1 style={{ 
+              fontSize: '32px', 
+              fontWeight: 'bold', 
+              color: '#111827', 
+              marginTop: '8px',
+              marginBottom: '16px'
+            }}>
+              {product.name}
+            </h1>
+
+            {/* SKU */}
+            {product.sku && (
+              <div style={{ marginBottom: '16px', fontSize: '14px', color: '#6b7280' }}>
+                SKU: {product.sku}
+              </div>
+            )}
 
             {/* Price */}
             <div style={{ marginBottom: '24px' }}>
               {product.discountPrice && product.discountPrice < product.price ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '28px', fontWeight: 'bold', color: '#059669' }}>
+                  <span style={{ fontSize: '32px', fontWeight: '700', color: '#059669' }}>
                     ${formatPrice(product.discountPrice)}
                   </span>
-                  <span style={{ fontSize: '18px', color: '#6b7280', textDecoration: 'line-through' }}>
+                  <span style={{ fontSize: '20px', color: '#6b7280', textDecoration: 'line-through' }}>
                     ${formatPrice(product.price)}
                   </span>
-                  <span style={{ 
-                    backgroundColor: '#dcfce7', 
-                    color: '#166534', 
-                    padding: '4px 8px', 
-                    borderRadius: '4px', 
-                    fontSize: '14px', 
-                    fontWeight: '500' 
+                  <span style={{
+                    backgroundColor: '#dcfce7',
+                    color: '#166534',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    fontWeight: '500'
                   }}>
                     Save ${formatPrice(product.price - product.discountPrice)}
                   </span>
                 </div>
               ) : (
-                <span style={{ fontSize: '28px', fontWeight: 'bold', color: '#111827' }}>
+                <span style={{ fontSize: '32px', fontWeight: '700', color: '#111827' }}>
                   ${formatPrice(product.price)}
                 </span>
               )}
@@ -349,159 +365,185 @@ export default function ProductDetail() {
 
             {/* Inventory Status */}
             <div style={{ marginBottom: '24px' }}>
-              <span style={{ 
-                display: 'inline-block',
-                backgroundColor: product.inventory > 0 ? '#dcfce7' : '#fef2f2',
-                color: product.inventory > 0 ? '#166534' : '#991b1b',
-                padding: '4px 8px',
-                borderRadius: '4px',
+              <span style={{
+                backgroundColor: parseInt(product.inventory) > 0 ? '#dcfce7' : '#fee2e2',
+                color: parseInt(product.inventory) > 0 ? '#166534' : '#991b1b',
+                padding: '4px 12px',
+                borderRadius: '16px',
                 fontSize: '14px',
                 fontWeight: '500'
               }}>
-                {product.inventory > 0 ? `${product.inventory} in stock` : 'Out of stock'}
+                {parseInt(product.inventory) > 0 ? `${product.inventory} in stock` : 'Out of stock'}
               </span>
             </div>
 
             {/* Product Specifications */}
             <div style={{ 
-              backgroundColor: 'white', 
-              border: '1px solid #e5e7eb', 
-              borderRadius: '8px', 
+              backgroundColor: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
               padding: '16px',
               marginBottom: '24px'
             }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>
+              <h2 style={{ 
+                fontSize: '18px', 
+                fontWeight: '600', 
+                color: '#111827', 
+                marginTop: 0,
+                marginBottom: '16px',
+                paddingBottom: '8px',
+                borderBottom: '1px solid #e5e7eb'
+              }}>
                 Product Specifications
               </h2>
-              <div style={{ fontSize: '14px' }}>
-                {product.specs ? (
-                  <ReactMarkdown className="prose prose-sm max-w-none">
-                    {product.specs}
-                  </ReactMarkdown>
-                ) : (
-                  <p style={{ color: '#6b7280' }}>No specifications available</p>
-                )}
+              <div style={{ 
+                whiteSpace: 'pre-wrap',
+                fontSize: '14px',
+                color: '#374151',
+                lineHeight: '1.5'
+              }}>
+                {product.specs || "No specifications available."}
               </div>
             </div>
 
-            {/* Quantity Selector and Add to Cart */}
-            <div style={{ marginBottom: '24px' }}>
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  border: '1px solid #d1d5db', 
-                  borderRadius: '6px', 
-                  overflow: 'hidden' 
-                }}>
-                  <button 
-                    onClick={() => handleQuantityChange(-1)}
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: '#f9fafb',
-                      border: 'none',
-                      borderRight: '1px solid #d1d5db',
-                      cursor: 'pointer',
-                      fontSize: '16px'
-                    }}
-                  >
-                    −
-                  </button>
-                  <span style={{ 
-                    padding: '0 16px', 
-                    fontSize: '14px',
-                    minWidth: '40px',
-                    textAlign: 'center'
-                  }}>
-                    {quantity}
-                  </span>
-                  <button 
-                    onClick={() => handleQuantityChange(1)}
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: '#f9fafb',
-                      border: 'none',
-                      borderLeft: '1px solid #d1d5db',
-                      cursor: 'pointer',
-                      fontSize: '16px'
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
+            {/* Quantity Selector */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              marginBottom: '24px'
+            }}>
+              <div style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                overflow: 'hidden'
+              }}>
                 <button 
+                  onClick={() => handleQuantityChange(-1)}
+                  disabled={quantity <= 1}
                   style={{
-                    flex: '1',
-                    backgroundColor: product.inventory > 0 ? '#2563eb' : '#9ca3af',
-                    color: 'white',
+                    width: '40px',
+                    height: '40px',
+                    backgroundColor: 'white',
                     border: 'none',
-                    borderRadius: '6px',
-                    padding: '0 16px',
+                    borderRight: '1px solid #d1d5db',
+                    cursor: quantity <= 1 ? 'not-allowed' : 'pointer',
                     fontSize: '16px',
-                    fontWeight: '500',
-                    cursor: product.inventory > 0 ? 'pointer' : 'not-allowed'
-                  }}
-                  disabled={product.inventory <= 0}
-                  onClick={() => {
-                    if (product.inventory > 0) {
-                      alert(`Added ${quantity} ${product.name} to cart`);
-                    }
+                    color: quantity <= 1 ? '#d1d5db' : '#374151'
                   }}
                 >
-                  {product.inventory > 0 ? 'Add to Cart' : 'Out of Stock'}
+                  −
+                </button>
+                <input 
+                  type="number" 
+                  min="1" 
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={{
+                    width: '60px',
+                    height: '40px',
+                    border: 'none',
+                    textAlign: 'center',
+                    fontSize: '16px'
+                  }}
+                />
+                <button 
+                  onClick={() => handleQuantityChange(1)}
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    backgroundColor: 'white',
+                    border: 'none',
+                    borderLeft: '1px solid #d1d5db',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    color: '#374151'
+                  }}
+                >
+                  +
                 </button>
               </div>
-              
-              {/* Shipping and Warranty */}
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button style={{
-                  flex: '1',
-                  backgroundColor: 'white',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  padding: '10px 0',
-                  fontSize: '14px',
-                  color: '#4b5563',
-                  cursor: 'pointer'
-                }}>
-                  Shipping Info
-                </button>
-                <button style={{
-                  flex: '1',
-                  backgroundColor: 'white',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  padding: '10px 0',
-                  fontSize: '14px',
-                  color: '#4b5563',
-                  cursor: 'pointer'
-                }}>
-                  Warranty
-                </button>
-              </div>
+            </div>
+
+            {/* Add to Cart Button */}
+            <button 
+              disabled={parseInt(product.inventory) <= 0}
+              style={{
+                width: '100%',
+                padding: '16px',
+                backgroundColor: parseInt(product.inventory) > 0 ? '#2563eb' : '#e5e7eb',
+                color: parseInt(product.inventory) > 0 ? 'white' : '#9ca3af',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: parseInt(product.inventory) > 0 ? 'pointer' : 'not-allowed',
+                marginBottom: '24px'
+              }}
+            >
+              {parseInt(product.inventory) > 0 ? 'Add to Cart' : 'Out of Stock'}
+            </button>
+
+            {/* Shipping & Warranty Buttons */}
+            <div style={{ 
+              display: 'flex', 
+              gap: '16px',
+              marginBottom: '24px'
+            }}>
+              <button style={{
+                flex: 1,
+                padding: '12px',
+                backgroundColor: 'white',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px',
+                color: '#374151',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}>
+                <span>Shipping Info</span>
+              </button>
+              <button style={{
+                flex: 1,
+                padding: '12px',
+                backgroundColor: 'white',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px',
+                color: '#374151',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}>
+                <span>Warranty</span>
+              </button>
             </div>
 
             {/* Product Description */}
             <div style={{ marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>
+              <h2 style={{ 
+                fontSize: '20px', 
+                fontWeight: '600', 
+                color: '#111827', 
+                marginBottom: '16px',
+                paddingBottom: '8px',
+                borderBottom: '1px solid #e5e7eb'
+              }}>
                 Product Description
               </h2>
-              <div style={{ fontSize: '14px', color: '#4b5563', lineHeight: '1.5' }}>
-                {product.description ? (
-                  <ReactMarkdown className="prose prose-sm max-w-none">
-                    {product.description}
-                  </ReactMarkdown>
-                ) : (
-                  <p>No description available</p>
-                )}
+              <div style={{ 
+                fontSize: '16px',
+                color: '#374151',
+                lineHeight: '1.6',
+                whiteSpace: 'pre-wrap'
+              }}>
+                {product.description || "No description available."}
               </div>
             </div>
           </div>
@@ -512,12 +554,6 @@ export default function ProductDetail() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
-        }
-        
-        @media (min-width: 768px) {
-          .product-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
         }
       `}</style>
     </div>
