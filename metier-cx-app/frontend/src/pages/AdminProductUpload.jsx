@@ -1,11 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function AdminProductUpload() {
-  const { productId } = useParams(); // Get product ID from URL for editing
-  const navigate = useNavigate();
-  const isEditing = !!productId;
-
+  const navigate = useNavigate(); // Add navigate for redirection
   const [infoFile, setInfoFile] = useState(null);
   const [productFiles, setProductFiles] = useState([]);
   const [previewInfo, setPreviewInfo] = useState("");
@@ -22,59 +19,14 @@ export default function AdminProductUpload() {
     image_url: ""
   });
   const [msg, setMsg] = useState("");
-  const [msgType, setMsgType] = useState("info");
+  const [msgType, setMsgType] = useState("info"); // success, error, info
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [currentStep, setCurrentStep] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1); // 1: Images, 2: Details, 3: Review
+  const [showSuccessModal, setShowSuccessModal] = useState(false); // Add success modal state
 
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
-
-  // Load product data if editing
-  useEffect(() => {
-    if (isEditing && productId) {
-      loadProductForEdit();
-    }
-  }, [productId, isEditing]);
-
-  const loadProductForEdit = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE}/api/admin/products/${productId}`);
-      if (!res.ok) throw new Error("Failed to load product");
-      
-      const product = await res.json();
-      
-      // Populate form fields
-      setFields({
-        name: product.name || "",
-        sku: product.sku || "",
-        category: product.category || "",
-        price: product.price?.toString() || "",
-        discountPrice: product.discountPrice?.toString() || "",
-        inventory: product.inventory?.toString() || "",
-        specs: product.specs || "",
-        description: product.description || "",
-        image_url: product.image_url || ""
-      });
-
-      // Set preview images
-      if (product.image_url) {
-        setPreviewInfo(product.image_url);
-      }
-      if (product.product_images && product.product_images.length > 0) {
-        setPreviewProducts(product.product_images);
-      }
-
-      setCurrentStep(2); // Skip to details step since images are already loaded
-      showMessage(`Loaded product "${product.name}" for editing`, "success");
-    } catch (e) {
-      showMessage(`Failed to load product: ${e.message}`, "error");
-      navigate("/products"); // Redirect back if product not found
-    } finally {
-      setLoading(false);
-    }
-  };
+  const API_BASE =
+    import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
 
   // Helper to show messages with types
   const showMessage = (message, type = "info") => {
@@ -135,7 +87,7 @@ export default function AdminProductUpload() {
         const url = await presignAndUpload(file, "products/images");
         urls.push(url);
       }
-      setPreviewProducts([...previewProducts, ...urls]); // Append to existing images
+      setPreviewProducts(urls);
       showMessage("Product images uploaded successfully!", "success");
     } catch (e) {
       showMessage(`Upload failed: ${e.message}`, "error");
@@ -187,7 +139,7 @@ export default function AdminProductUpload() {
     }
   }
 
-  // --- Save or Update product ---
+  // --- Save product ---
   async function handleSave(e) {
     e.preventDefault();
     
@@ -199,72 +151,52 @@ export default function AdminProductUpload() {
 
     try {
       setBusy(true);
-      showMessage(isEditing ? "Updating product..." : "Saving product...", "info");
-      
-      const url = isEditing 
-        ? `${API_BASE}/api/admin/products/${productId}`
-        : `${API_BASE}/api/admin/products`;
-      
-      const method = isEditing ? "PUT" : "POST";
-      
-      const res = await fetch(url, {
-        method,
+      showMessage("Saving product...", "info");
+      const res = await fetch(`${API_BASE}/api/admin/products`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...fields,
           product_images: previewProducts,
         }),
       });
+      if (!res.ok) throw new Error("Failed to save product");
       
-      if (!res.ok) throw new Error(`Failed to ${isEditing ? 'update' : 'save'} product`);
+      // Show success modal instead of just a message
+      setShowSuccessModal(true);
       
-      showMessage(
-        isEditing 
-          ? "Product updated successfully!" 
-          : "Product saved successfully! Check the catalog.", 
-        "success"
-      );
-      
-      // Navigate back to products after successful save/update
-      setTimeout(() => {
-        navigate("/products");
-      }, 1500);
-      
+      // Reset form after user acknowledges success
+      // Form reset moved to the modal close handler
     } catch (e) {
-      showMessage(`${isEditing ? 'Update' : 'Save'} failed: ${e.message}`, "error");
-    } finally {
+      showMessage(`Save failed: ${e.message}`, "error");
       setBusy(false);
     }
   }
 
-  // Handle cancel - go back to products
-  const handleCancel = () => {
-    navigate("/products");
+  // Handle success modal close
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    
+    // Reset form
+    setFields({
+      name: "",
+      sku: "",
+      category: "",
+      price: "",
+      discountPrice: "",
+      inventory: "",
+      specs: "",
+      description: "",
+      image_url: "",
+    });
+    setInfoFile(null);
+    setProductFiles([]);
+    setPreviewInfo("");
+    setPreviewProducts([]);
+    setFeedback("");
+    setCurrentStep(1);
+    setBusy(false);
   };
-
-  // Remove image from gallery
-  const removeGalleryImage = (index) => {
-    setPreviewProducts(previewProducts.filter((_, i) => i !== index));
-  };
-
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            border: '3px solid #e5e7eb',
-            borderTop: '3px solid #2563eb',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }}></div>
-          <p style={{ fontSize: '18px', color: '#6b7280' }}>Loading product...</p>
-        </div>
-      </div>
-    );
-  }
 
   // --- UI ---
   return (
@@ -298,7 +230,7 @@ export default function AdminProductUpload() {
                 <Link 
                   to="/admin" 
                   style={{ 
-                    color: isEditing ? '#64748b' : '#3b82f6', 
+                    color: '#3b82f6', 
                     textDecoration: 'none', 
                     fontWeight: '500' 
                   }}
@@ -308,14 +240,14 @@ export default function AdminProductUpload() {
               </div>
             </div>
             <span style={{
-              backgroundColor: isEditing ? '#fef3c7' : '#dbeafe',
-              color: isEditing ? '#92400e' : '#1d4ed8',
+              backgroundColor: '#dbeafe',
+              color: '#1d4ed8',
               padding: '4px 12px',
               borderRadius: '16px',
               fontSize: '12px',
               fontWeight: '500'
             }}>
-              {isEditing ? '✏️ EDITING MODE' : '✓ MODERN UI'}
+              ✓ MODERN UI
             </span>
           </div>
         </div>
@@ -325,40 +257,16 @@ export default function AdminProductUpload() {
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
         {/* Page Header */}
         <div style={{ marginBottom: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-            <button
-              onClick={handleCancel}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: '#f3f4f6',
-                color: '#374151',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              ← Back to Products
-            </button>
-          </div>
-          
           <h1 style={{ 
             fontSize: '32px', 
             fontWeight: 'bold', 
             color: '#1e293b', 
             margin: '0 0 8px 0' 
           }}>
-            {isEditing ? `Edit Product: ${fields.name || 'Loading...'}` : 'Upload New Product'}
+            Upload New Product
           </h1>
           <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
-            {isEditing 
-              ? 'Update product information and save changes'
-              : 'Add a new product to your catalog with AI-powered content generation'
-            }
+            Add a new product to your catalog with AI-powered content generation
           </p>
         </div>
 
@@ -401,18 +309,18 @@ export default function AdminProductUpload() {
                   {item.title}
                 </div>
                 <div style={{ 
-                  fontSize: '12px', 
-                  color: '#64748b' 
+                  color: currentStep >= item.step ? '#64748b' : '#94a3b8',
+                  fontSize: '12px'
                 }}>
                   {item.desc}
                 </div>
               </div>
               {index < 2 && (
-                <div style={{
-                  height: '2px',
+                <div style={{ 
+                  height: '2px', 
+                  flex: '0.5', 
                   backgroundColor: currentStep > item.step ? '#3b82f6' : '#e2e8f0',
-                  flex: 1,
-                  marginLeft: '16px'
+                  margin: '0 8px'
                 }} />
               )}
             </div>
@@ -422,148 +330,142 @@ export default function AdminProductUpload() {
         {/* Message Display */}
         {msg && (
           <div style={{
-            padding: '16px',
-            borderRadius: '8px',
+            padding: '12px 16px',
             marginBottom: '24px',
-            backgroundColor: msgType === 'success' ? '#f0fdf4' : msgType === 'error' ? '#fef2f2' : '#f0f9ff',
-            border: `1px solid ${msgType === 'success' ? '#bbf7d0' : msgType === 'error' ? '#fecaca' : '#bae6fd'}`,
-            color: msgType === 'success' ? '#166534' : msgType === 'error' ? '#dc2626' : '#0369a1'
+            borderRadius: '8px',
+            backgroundColor: 
+              msgType === 'success' ? '#dcfce7' : 
+              msgType === 'error' ? '#fee2e2' : 
+              '#dbeafe',
+            color: 
+              msgType === 'success' ? '#166534' : 
+              msgType === 'error' ? '#991b1b' : 
+              '#1e40af',
+            border: 
+              msgType === 'success' ? '1px solid #bbf7d0' : 
+              msgType === 'error' ? '1px solid #fecaca' : 
+              '1px solid #bfdbfe',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px' }}>
-                {msgType === 'success' ? '✅' : msgType === 'error' ? '❌' : 'ℹ️'}
-              </span>
-              {msg}
-            </div>
+            <span style={{ fontWeight: '600' }}>
+              {msgType === 'success' ? '✓' : msgType === 'error' ? '✗' : 'ℹ'}
+            </span>
+            {msg}
           </div>
         )}
 
+        {/* Form */}
         <form onSubmit={handleSave}>
-          <div style={{ display: 'grid', gap: '24px' }}>
-            
-            {/* Step 1: Image Upload */}
-            <div style={{
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              padding: '32px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              border: '1px solid #e2e8f0'
-            }}>
-              <h3 style={{ 
+          <div style={{ 
+            backgroundColor: 'white', 
+            borderRadius: '12px', 
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            padding: '32px',
+            marginBottom: '24px'
+          }}>
+            {/* Step 1: Images */}
+            <div style={{ display: currentStep === 1 ? 'block' : 'none' }}>
+              <h2 style={{ 
                 fontSize: '20px', 
                 fontWeight: '600', 
                 color: '#1e293b', 
-                margin: '0 0 20px 0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+                marginTop: 0,
+                marginBottom: '24px'
               }}>
-                📸 Product Images
-              </h3>
+                Upload Product Images
+              </h2>
 
-              {/* Description Image */}
+              {/* Description Image Upload */}
               <div style={{ marginBottom: '32px' }}>
-                <label style={{ 
-                  display: 'block', 
-                  fontSize: '14px', 
+                <h3 style={{ 
+                  fontSize: '16px', 
                   fontWeight: '600', 
-                  color: '#374151', 
-                  marginBottom: '8px' 
-                }}>
-                  Main Description Image *
-                </label>
-                <p style={{ 
-                  fontSize: '12px', 
-                  color: '#6b7280', 
+                  color: '#334155', 
                   marginBottom: '12px' 
                 }}>
-                  {isEditing ? 'Update the primary product image' : 'Upload the primary product image for AI analysis and description generation'}
-                </p>
-                
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+                  Main Product Image
+                </h3>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: '16px',
+                  alignItems: 'flex-start'
+                }}>
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => setInfoFile(e.target.files?.[0] || null)}
+                    onChange={(e) => setInfoFile(e.target.files[0])}
                     style={{
-                      padding: '8px 12px',
+                      padding: '8px',
                       border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontSize: '14px',
+                      borderRadius: '8px',
                       backgroundColor: 'white'
                     }}
                   />
-                  <button 
-                    type="button" 
-                    onClick={handleInfoUpload} 
+                  <button
+                    type="button"
+                    onClick={handleInfoUpload}
                     disabled={!infoFile || busy}
                     style={{
                       padding: '8px 16px',
                       backgroundColor: !infoFile || busy ? '#e5e7eb' : '#3b82f6',
                       color: !infoFile || busy ? '#9ca3af' : 'white',
                       border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '14px',
-                      fontWeight: '500',
+                      borderRadius: '8px',
                       cursor: !infoFile || busy ? 'not-allowed' : 'pointer',
-                      transition: 'background-color 0.2s'
+                      fontSize: '14px',
+                      fontWeight: '500'
                     }}
                   >
-                    {busy ? 'Uploading...' : 'Upload'}
+                    Upload Main Image
                   </button>
+                  {previewInfo && (
+                    <div style={{ marginTop: '16px' }}>
+                      <img
+                        src={previewInfo}
+                        alt="Description"
+                        style={{
+                          maxWidth: '200px',
+                          maxHeight: '200px',
+                          objectFit: 'contain',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          padding: '8px',
+                          backgroundColor: '#f8fafc'
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
-
-                {previewInfo && (
-                  <div style={{ 
-                    border: '1px solid #e5e7eb', 
-                    borderRadius: '8px', 
-                    padding: '16px',
-                    backgroundColor: '#f9fafb'
-                  }}>
-                    <img
-                      src={previewInfo}
-                      alt="Description preview"
-                      style={{ 
-                        maxWidth: '300px', 
-                        maxHeight: '200px', 
-                        objectFit: 'contain',
-                        borderRadius: '6px'
-                      }}
-                    />
-                  </div>
-                )}
               </div>
 
-              {/* Product Gallery */}
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ 
-                  display: 'block', 
-                  fontSize: '14px', 
+              {/* Product Gallery Upload */}
+              <div style={{ marginBottom: '32px' }}>
+                <h3 style={{ 
+                  fontSize: '16px', 
                   fontWeight: '600', 
-                  color: '#374151', 
-                  marginBottom: '8px' 
-                }}>
-                  Product Gallery Images
-                </label>
-                <p style={{ 
-                  fontSize: '12px', 
-                  color: '#6b7280', 
+                  color: '#334155', 
                   marginBottom: '12px' 
                 }}>
-                  {isEditing ? 'Add more product images to the gallery' : 'Upload additional product images for the gallery (optional)'}
-                </p>
-                
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+                  Product Gallery Images
+                </h3>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: '16px',
+                  alignItems: 'flex-start'
+                }}>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(e) => setProductFiles(Array.from(e.target.files || []))}
+                    onChange={(e) => setProductFiles(Array.from(e.target.files))}
                     style={{
-                      padding: '8px 12px',
+                      padding: '8px',
                       border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontSize: '14px',
+                      borderRadius: '8px',
                       backgroundColor: 'white'
                     }}
                   />
@@ -573,183 +475,178 @@ export default function AdminProductUpload() {
                     disabled={!productFiles.length || busy}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: !productFiles.length || busy ? '#e5e7eb' : '#10b981',
+                      backgroundColor: !productFiles.length || busy ? '#e5e7eb' : '#3b82f6',
                       color: !productFiles.length || busy ? '#9ca3af' : 'white',
                       border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '14px',
-                      fontWeight: '500',
+                      borderRadius: '8px',
                       cursor: !productFiles.length || busy ? 'not-allowed' : 'pointer',
-                      transition: 'background-color 0.2s'
+                      fontSize: '14px',
+                      fontWeight: '500'
                     }}
                   >
-                    {busy ? 'Uploading...' : 'Upload Gallery'}
+                    Upload Gallery Images
                   </button>
-                </div>
-
-                {previewProducts.length > 0 && (
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 
-                    gap: '12px',
-                    padding: '16px',
-                    backgroundColor: '#f9fafb',
-                    borderRadius: '8px',
-                    border: '1px solid #e5e7eb'
-                  }}>
-                    {previewProducts.map((url, i) => (
-                      <div key={i} style={{ position: 'relative' }}>
-                        <img 
-                          src={url} 
-                          alt={`Gallery ${i + 1}`} 
-                          style={{ 
-                            width: '100%', 
-                            height: '120px', 
+                  {previewProducts.length > 0 && (
+                    <div style={{ 
+                      marginTop: '16px',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '12px'
+                    }}>
+                      {previewProducts.map((url, i) => (
+                        <img
+                          key={i}
+                          src={url}
+                          alt={`Product ${i + 1}`}
+                          style={{
+                            width: '100px',
+                            height: '100px',
                             objectFit: 'cover',
-                            borderRadius: '6px',
-                            border: '1px solid #e5e7eb'
-                          }} 
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            padding: '4px',
+                            backgroundColor: '#f8fafc'
+                          }}
                         />
-                        {isEditing && (
-                          <button
-                            type="button"
-                            onClick={() => removeGalleryImage(i)}
-                            style={{
-                              position: 'absolute',
-                              top: '4px',
-                              right: '4px',
-                              width: '20px',
-                              height: '20px',
-                              backgroundColor: '#ef4444',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '50%',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* AI Generate Button - Only show if not editing or if no content exists */}
-              {(!isEditing || !fields.name) && (
-                <div style={{ 
-                  padding: '20px', 
-                  backgroundColor: '#f8fafc', 
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0'
+              {/* AI Description Button */}
+              <div style={{ 
+                backgroundColor: '#f0f9ff', 
+                border: '1px solid #bae6fd', 
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '24px'
+              }}>
+                <h3 style={{ 
+                  fontSize: '16px', 
+                  fontWeight: '600', 
+                  color: '#0369a1', 
+                  marginTop: 0,
+                  marginBottom: '8px' 
                 }}>
-                  <h4 style={{ 
-                    fontSize: '16px', 
-                    fontWeight: '600', 
-                    color: '#1e293b', 
-                    margin: '0 0 8px 0' 
-                  }}>
-                    🤖 AI Content Generation
-                  </h4>
-                  <p style={{ 
-                    fontSize: '14px', 
-                    color: '#64748b', 
-                    marginBottom: '16px' 
-                  }}>
-                    Let AI analyze your product image and generate name, description, specifications, and other details automatically.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleDescribe}
-                    disabled={busy || !fields.image_url}
-                    style={{
-                      padding: '12px 24px',
-                      backgroundColor: busy || !fields.image_url ? '#e5e7eb' : '#8b5cf6',
-                      color: busy || !fields.image_url ? '#9ca3af' : 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      cursor: busy || !fields.image_url ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    {busy ? (
-                      <>
-                        <div style={{
-                          width: '16px',
-                          height: '16px',
-                          border: '2px solid transparent',
-                          borderTop: '2px solid currentColor',
-                          borderRadius: '50%',
-                          animation: 'spin 1s linear infinite'
-                        }} />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>🚀 Generate with AI</>
-                    )}
-                  </button>
-                </div>
-              )}
+                  Generate Product Details with AI
+                </h3>
+                <p style={{ 
+                  color: '#0c4a6e', 
+                  fontSize: '14px',
+                  marginBottom: '16px'
+                }}>
+                  Upload a main product image and click below to automatically generate product details using AI.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleDescribe}
+                  disabled={!fields.image_url || busy}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: !fields.image_url || busy ? '#e5e7eb' : '#0ea5e9',
+                    color: !fields.image_url || busy ? '#9ca3af' : 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: !fields.image_url || busy ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {busy ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid transparent',
+                        borderTop: '2px solid currentColor',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      Processing...
+                    </>
+                  ) : (
+                    <>✨ Generate with AI</>
+                  )}
+                </button>
+              </div>
+
+              {/* Navigation Buttons */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                marginTop: '32px',
+                paddingTop: '24px',
+                borderTop: '1px solid #e2e8f0'
+              }}>
+                <div></div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Continue to Details
+                </button>
+              </div>
             </div>
 
             {/* Step 2: Product Details */}
-            <div style={{
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              padding: '32px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              border: '1px solid #e2e8f0'
-            }}>
-              <h3 style={{ 
+            <div style={{ display: currentStep === 2 ? 'block' : 'none' }}>
+              <h2 style={{ 
                 fontSize: '20px', 
                 fontWeight: '600', 
                 color: '#1e293b', 
-                margin: '0 0 24px 0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+                marginTop: 0,
+                marginBottom: '24px'
               }}>
-                📝 Product Information
-              </h3>
+                Product Details
+              </h2>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
-                {/* Basic Info */}
-                <div>
-                  <label style={{ 
-                    display: 'block', 
-                    fontSize: '14px', 
-                    fontWeight: '600', 
-                    color: '#374151', 
-                    marginBottom: '6px' 
-                  }}>
-                    Product Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={fields.name}
-                    onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="Enter product name"
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      backgroundColor: 'white'
-                    }}
-                  />
-                </div>
+              {/* Basic Info */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: '#374151', 
+                  marginBottom: '6px' 
+                }}>
+                  Product Name *
+                </label>
+                <input
+                  type="text"
+                  value={fields.name}
+                  onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Enter product name"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
+                />
+              </div>
 
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: '16px',
+                marginBottom: '24px'
+              }}>
                 <div>
                   <label style={{ 
                     display: 'block', 
@@ -827,7 +724,14 @@ export default function AdminProductUpload() {
                     }}
                   />
                 </div>
+              </div>
 
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: '16px',
+                marginBottom: '24px'
+              }}>
                 <div>
                   <label style={{ 
                     display: 'block', 
@@ -940,40 +844,256 @@ export default function AdminProductUpload() {
                   }}
                 />
               </div>
+
+              {/* Navigation Buttons */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                marginTop: '32px',
+                paddingTop: '24px',
+                borderTop: '1px solid #e2e8f0'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: 'white',
+                    color: '#64748b',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Back to Images
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(3)}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Continue to Review
+                </button>
+              </div>
             </div>
 
-            {/* Step 3: Admin Feedback - Only show for new products */}
-            {!isEditing && (
-              <div style={{
-                backgroundColor: 'white',
-                borderRadius: '12px',
-                padding: '32px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                border: '1px solid #e2e8f0'
+            {/* Step 3: Review & Save */}
+            <div style={{ display: currentStep === 3 ? 'block' : 'none' }}>
+              <h2 style={{ 
+                fontSize: '20px', 
+                fontWeight: '600', 
+                color: '#1e293b', 
+                marginTop: 0,
+                marginBottom: '24px'
               }}>
-                <h3 style={{ 
-                  fontSize: '20px', 
-                  fontWeight: '600', 
-                  color: '#1e293b', 
-                  margin: '0 0 12px 0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                Review & Save
+              </h2>
+
+              {/* Preview */}
+              <div style={{ 
+                backgroundColor: '#f8fafc', 
+                border: '1px solid #e2e8f0', 
+                borderRadius: '8px',
+                padding: '24px',
+                marginBottom: '32px'
+              }}>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  gap: '16px'
                 }}>
-                  💬 Admin Feedback
-                </h3>
-                <p style={{ 
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '24px',
+                    flexWrap: 'wrap'
+                  }}>
+                    <div style={{ 
+                      width: '200px', 
+                      height: '200px',
+                      backgroundColor: '#f1f5f9',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      flexShrink: 0
+                    }}>
+                      <img
+                        src={previewInfo || "/placeholder.png"}
+                        alt="Product"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ 
+                        fontSize: '18px', 
+                        fontWeight: '600', 
+                        color: '#1e293b', 
+                        marginTop: 0,
+                        marginBottom: '8px'
+                      }}>
+                        {fields.name || "Unnamed Product"}
+                      </h3>
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '8px',
+                        marginBottom: '12px'
+                      }}>
+                        <span style={{
+                          backgroundColor: '#f1f5f9',
+                          color: '#475569',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px'
+                        }}>
+                          {fields.category || "Uncategorized"}
+                        </span>
+                        {fields.sku && (
+                          <span style={{
+                            backgroundColor: '#f1f5f9',
+                            color: '#475569',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}>
+                            SKU: {fields.sku}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ marginBottom: '12px' }}>
+                        {fields.discountPrice ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '20px', fontWeight: '700', color: '#059669' }}>
+                              ${parseFloat(fields.discountPrice).toFixed(2)}
+                            </span>
+                            <span style={{ fontSize: '16px', color: '#64748b', textDecoration: 'line-through' }}>
+                              ${parseFloat(fields.price).toFixed(2)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '20px', fontWeight: '700', color: '#1e293b' }}>
+                            ${parseFloat(fields.price || 0).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#475569' }}>
+                        {fields.inventory ? `${fields.inventory} in stock` : "No stock information"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gallery Preview */}
+                  {previewProducts.length > 0 && (
+                    <div>
+                      <h4 style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600', 
+                        color: '#475569', 
+                        marginBottom: '8px' 
+                      }}>
+                        Gallery Images ({previewProducts.length})
+                      </h4>
+                      <div style={{ 
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px'
+                      }}>
+                        {previewProducts.map((url, i) => (
+                          <img
+                            key={i}
+                            src={url}
+                            alt={`Product ${i + 1}`}
+                            style={{
+                              width: '60px',
+                              height: '60px',
+                              objectFit: 'cover',
+                              borderRadius: '4px'
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Specs Preview */}
+                  {fields.specs && (
+                    <div>
+                      <h4 style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600', 
+                        color: '#475569', 
+                        marginBottom: '8px' 
+                      }}>
+                        Specifications
+                      </h4>
+                      <div style={{ 
+                        backgroundColor: 'white',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        padding: '12px',
+                        fontSize: '14px',
+                        color: '#475569',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {fields.specs}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description Preview */}
+                  {fields.description && (
+                    <div>
+                      <h4 style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600', 
+                        color: '#475569', 
+                        marginBottom: '8px' 
+                      }}>
+                        Description
+                      </h4>
+                      <div style={{ 
+                        backgroundColor: 'white',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        padding: '12px',
+                        fontSize: '14px',
+                        color: '#475569',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {fields.description}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* AI Feedback */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ 
+                  display: 'block', 
                   fontSize: '14px', 
-                  color: '#64748b', 
-                  marginBottom: '16px' 
+                  fontWeight: '600', 
+                  color: '#374151', 
+                  marginBottom: '6px' 
                 }}>
-                  Provide feedback for future AI improvements (optional)
-                </p>
-                
+                  AI Feedback (Optional)
+                </label>
                 <textarea
-                  placeholder="Suggest corrections or improvements for AI-generated content..."
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="How was the AI-generated content? Any suggestions for improvement?"
                   rows={3}
                   style={{
                     width: '100%',
@@ -994,72 +1114,165 @@ export default function AdminProductUpload() {
                   This feedback will be used to improve future AI content generation
                 </p>
               </div>
-            )}
 
-            {/* Save Button */}
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'flex-end', 
-              gap: '12px',
-              paddingTop: '24px',
-              borderTop: '1px solid #e2e8f0'
-            }}>
-              <button
-                type="button"
-                onClick={handleCancel}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: 'white',
-                  color: '#64748b',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Cancel
-              </button>
-              
-              <button 
-                type="submit" 
-                disabled={busy}
-                style={{
-                  padding: '12px 32px',
-                  backgroundColor: busy ? '#e5e7eb' : '#059669',
-                  color: busy ? '#9ca3af' : 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: busy ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                {busy ? (
-                  <>
-                    <div style={{
-                      width: '16px',
-                      height: '16px',
-                      border: '2px solid transparent',
-                      borderTop: '2px solid currentColor',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }} />
-                    {isEditing ? 'Updating...' : 'Saving...'}
-                  </>
-                ) : (
-                  <>{isEditing ? '💾 Update Product' : '💾 Save Product'}</>
-                )}
-              </button>
+              {/* Save Button */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                gap: '12px',
+                paddingTop: '24px',
+                borderTop: '1px solid #e2e8f0'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: 'white',
+                    color: '#64748b',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Back to Details
+                </button>
+                
+                <button 
+                  type="submit" 
+                  disabled={busy}
+                  style={{
+                    padding: '12px 32px',
+                    backgroundColor: busy ? '#e5e7eb' : '#059669',
+                    color: busy ? '#9ca3af' : 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {busy ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid transparent',
+                        borderTop: '2px solid currentColor',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      Saving...
+                    </>
+                  ) : (
+                    <>💾 Save Product</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </form>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '32px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+          }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              backgroundColor: '#dcfce7',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 24px'
+            }}>
+              <span style={{ fontSize: '32px', color: '#059669' }}>✓</span>
+            </div>
+            <h3 style={{
+              fontSize: '24px',
+              fontWeight: 'bold',
+              color: '#111827',
+              textAlign: 'center',
+              marginBottom: '16px'
+            }}>
+              Product Saved Successfully!
+            </h3>
+            <p style={{
+              fontSize: '16px',
+              color: '#4b5563',
+              textAlign: 'center',
+              marginBottom: '24px'
+            }}>
+              Your product has been added to the catalog and is now available for customers to view.
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: '16px',
+              justifyContent: 'center'
+            }}>
+              <button
+                onClick={() => {
+                  handleSuccessModalClose();
+                  navigate('/products');
+                }}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                View Products
+              </button>
+              <button
+                onClick={handleSuccessModalClose}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#059669',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                Add Another Product
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes spin {
