@@ -157,6 +157,16 @@ export default function App() {
         {/* Admin routes - require admin role */}
         <Route path="/admin" element={<EnhancedAdmin />} />
         
+        {/* NEW ROUTE: Edit Product - require admin role */}
+        <Route 
+          path="/admin/edit/:productId" 
+          element={
+            <AdminRoute>
+              <AdminProductUpload />
+            </AdminRoute>
+          } 
+        />
+        
         {/* Customer routes - require authentication (admin or customer) */}
         <Route path="/products" element={<EnhancedProducts />} />
         <Route 
