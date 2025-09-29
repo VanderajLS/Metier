@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Import auth utilities
+import { getUserRole, getUserDisplayName, logout, isAdmin, ROLES } from "../utils/auth";
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -17,10 +20,21 @@ export default function Products() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortBy, setSortBy] = useState("name");
-  const [viewMode, setViewMode] = useState("grid"); // grid or list
+  const [viewMode, setViewMode] = useState("grid");
+  
+  // Admin options states
+  const [showOptionsMenu, setShowOptionsMenu] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(null);
+  const [showInventoryModal, setShowInventoryModal] = useState(null);
+  const [inventoryValue, setInventoryValue] = useState("");
 
-  const API_BASE =
-    import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
+  const navigate = useNavigate();
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
+  
+  // Get user info
+  const userRole = getUserRole();
+  const userDisplayName = getUserDisplayName();
+  const isUserAdmin = isAdmin();
 
   useEffect(() => {
     async function loadProducts() {
@@ -44,11 +58,19 @@ export default function Products() {
     loadProducts();
   }, [API_BASE]);
 
+  // Close options menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside() {
+      setShowOptionsMenu(null);
+    }
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   // Filter and sort products
   useEffect(() => {
     let filtered = [...products];
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(product =>
         product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -57,14 +79,12 @@ export default function Products() {
       );
     }
 
-    // Category filter
     if (selectedCategory !== "all") {
       filtered = filtered.filter(product => 
         product.category?.toLowerCase() === selectedCategory.toLowerCase()
       );
     }
 
-    // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "price-low":
@@ -98,6 +118,58 @@ export default function Products() {
   const getUniqueCategories = () => {
     const categories = products.map(p => p.category).filter(Boolean);
     return [...new Set(categories)];
+  };
+
+  // Admin functions
+  const handleDeleteProduct = async (product) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/products/${product.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (res.ok) {
+        setProducts(products.filter(p => p.id !== product.id));
+        setShowDeleteModal(null);
+        alert("Product deleted successfully");
+      } else {
+        alert("Failed to delete product");
+      }
+    } catch (e) {
+      alert("Error deleting product: " + e.message);
+    }
+  };
+
+  const handleEditProduct = (product) => {
+    navigate(`/admin/edit/${product.id}`);
+  };
+
+  const handleInventoryUpdate = async (product) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/products/${product.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventory: parseInt(inventoryValue) })
+      });
+      
+      if (res.ok) {
+        // Update local state
+        setProducts(products.map(p => 
+          p.id === product.id ? { ...p, inventory: parseInt(inventoryValue) } : p
+        ));
+        setShowInventoryModal(null);
+        setInventoryValue("");
+        alert("Inventory updated successfully");
+      } else {
+        alert("Failed to update inventory");
+      }
+    } catch (e) {
+      alert("Error updating inventory: " + e.message);
+    }
+  };
+
+  const openInventoryModal = (product) => {
+    setShowInventoryModal(product);
+    setInventoryValue(product.inventory?.toString() || "0");
   };
 
   if (loading) {
@@ -136,8 +208,6 @@ export default function Products() {
                 cursor: 'pointer',
                 transition: 'background-color 0.2s'
               }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#f9fafb'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
             >
               Try Again
             </button>
@@ -161,15 +231,49 @@ export default function Products() {
                 <Link to="/products" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
                   Products
                 </Link>
-                <Link to="/admin" style={{ color: '#6b7280', textDecoration: 'none' }}>
-                  Admin
-                </Link>
+                {isUserAdmin && (
+                  <>
+                    <Link to="/admin" style={{ color: '#6b7280', textDecoration: 'none' }}>
+                      Admin Upload
+                    </Link>
+                    <Link to="/admin/orders" style={{ color: '#6b7280', textDecoration: 'none' }}>
+                      Orders
+                    </Link>
+                  </>
+                )}
+                {userRole === ROLES.CUSTOMER && (
+                  <Link to="/cart" style={{ color: '#6b7280', textDecoration: 'none' }}>
+                    Cart
+                  </Link>
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <span style={{ backgroundColor: '#dcfce7', color: '#166534', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' }}>
-                ✓ ENHANCED VERSION
+              <span style={{ 
+                backgroundColor: userRole === ROLES.ADMIN ? '#dbeafe' : '#dcfce7', 
+                color: userRole === ROLES.ADMIN ? '#1d4ed8' : '#166534', 
+                padding: '4px 8px', 
+                borderRadius: '12px', 
+                fontSize: '12px', 
+                fontWeight: '500' 
+              }}>
+                {userDisplayName}
               </span>
+              <button
+                onClick={logout}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontWeight: '500'
+                }}
+              >
+                Logout
+              </button>
             </div>
           </div>
         </div>
@@ -191,7 +295,6 @@ export default function Products() {
 
           {/* Search and Filter Controls */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
-            {/* Search */}
             <div style={{ flex: '1', minWidth: '200px' }}>
               <input
                 type="text"
@@ -208,7 +311,6 @@ export default function Products() {
               />
             </div>
 
-            {/* Category Filter */}
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
@@ -226,7 +328,6 @@ export default function Products() {
               ))}
             </select>
 
-            {/* Sort */}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -243,7 +344,6 @@ export default function Products() {
               <option value="price-high">Price: High to Low</option>
             </select>
 
-            {/* View Mode Toggle */}
             <div style={{ display: 'flex', border: '1px solid #d1d5db', borderRadius: '6px', overflow: 'hidden' }}>
               <button
                 onClick={() => setViewMode('grid')}
@@ -329,7 +429,8 @@ export default function Products() {
                 overflow: 'hidden',
                 border: '1px solid #e5e7eb',
                 transition: 'box-shadow 0.2s',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                position: 'relative'
               } : {
                 backgroundColor: 'white',
                 borderRadius: '8px',
@@ -338,7 +439,8 @@ export default function Products() {
                 border: '1px solid #e5e7eb',
                 display: 'flex',
                 transition: 'box-shadow 0.2s',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                position: 'relative'
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.15)';
@@ -347,21 +449,147 @@ export default function Products() {
                 e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
               }}>
                 
+                {/* Admin Options Menu */}
+                {isUserAdmin && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    zIndex: 10
+                  }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowOptionsMenu(showOptionsMenu === product.id ? null : product.id);
+                      }}
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        color: '#6b7280',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = 'white';
+                        e.target.style.color = '#111827';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+                        e.target.style.color = '#6b7280';
+                      }}
+                    >
+                      ⋯
+                    </button>
+                    
+                    {/* Options Dropdown */}
+                    {showOptionsMenu === product.id && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '28px',
+                        right: '0',
+                        backgroundColor: 'white',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                        minWidth: '120px',
+                        zIndex: 20
+                      }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditProduct(product);
+                            setShowOptionsMenu(null);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: 'none',
+                            backgroundColor: 'transparent',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            color: '#374151',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openInventoryModal(product);
+                            setShowOptionsMenu(null);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: 'none',
+                            backgroundColor: 'transparent',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            color: '#374151',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
+                          Edit Inventory
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDeleteModal(product);
+                            setShowOptionsMenu(null);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: 'none',
+                            backgroundColor: 'transparent',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            color: '#dc2626',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = '#fef2f2'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Product Image */}
-                <div style={viewMode === 'grid' ? {
-                  position: 'relative',
-                  width: '100%',
-                  height: '250px',
-                  overflow: 'hidden',
-                  backgroundColor: '#f3f4f6'
-                } : {
-                  position: 'relative',
-                  width: '200px',
-                  height: '150px',
-                  overflow: 'hidden',
-                  backgroundColor: '#f3f4f6',
-                  flexShrink: 0
-                }}>
+                <div 
+                  onClick={() => setSelectedProduct(product)}
+                  style={viewMode === 'grid' ? {
+                    position: 'relative',
+                    width: '100%',
+                    height: '250px',
+                    overflow: 'hidden',
+                    backgroundColor: '#f3f4f6'
+                  } : {
+                    position: 'relative',
+                    width: '200px',
+                    height: '150px',
+                    overflow: 'hidden',
+                    backgroundColor: '#f3f4f6',
+                    flexShrink: 0
+                  }}
+                >
                   <img
                     src={getProductImage(product)}
                     alt={product.name || "Product"}
@@ -379,7 +607,7 @@ export default function Products() {
                     <span style={{
                       position: 'absolute',
                       top: '8px',
-                      right: '8px',
+                      left: '8px',
                       backgroundColor: '#ef4444',
                       color: 'white',
                       padding: '4px 8px',
@@ -392,7 +620,10 @@ export default function Products() {
                   )}
                 </div>
 
-                <div style={{ padding: '16px', flex: viewMode === 'list' ? 1 : 'none' }}>
+                <div 
+                  onClick={() => setSelectedProduct(product)}
+                  style={{ padding: '16px', flex: viewMode === 'list' ? 1 : 'none' }}
+                >
                   <div style={{ marginBottom: '8px' }}>
                     <h3 style={{
                       fontWeight: '600',
@@ -474,35 +705,204 @@ export default function Products() {
                     </p>
                   )}
 
-                  <button
-                    onClick={() => setSelectedProduct(product)}
-                    style={{
-                      width: viewMode === 'grid' ? '100%' : 'auto',
-                      backgroundColor: '#2563eb',
-                      color: 'white',
-                      padding: '10px 16px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: '500',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = '#1d4ed8';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = '#2563eb';
-                    }}
-                  >
-                    View Details
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedProduct(product);
+                      }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#2563eb',
+                        color: 'white',
+                        padding: '10px 16px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        transition: 'background-color 0.2s'
+                      }}
+                    >
+                      View Details
+                    </button>
+                    
+                    {userRole === ROLES.CUSTOMER && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          alert("Add to cart functionality coming soon!");
+                        }}
+                        style={{
+                          backgroundColor: '#10b981',
+                          color: 'white',
+                          padding: '10px 12px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        Add to Cart
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.25)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>
+              Delete Product
+            </h3>
+            <p style={{ color: '#6b7280', marginBottom: '20px' }}>
+              Are you sure you want to delete "{showDeleteModal.name}"? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteModal(null)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteProduct(showDeleteModal)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inventory Edit Modal */}
+      {showInventoryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.25)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', color: '#111827' }}>
+              Update Inventory
+            </h3>
+            <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+              Update inventory for "{showInventoryModal.name}"
+            </p>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+                Current Stock
+              </label>
+              <input
+                type="number"
+                value={inventoryValue}
+                onChange={(e) => setInventoryValue(e.target.value)}
+                min="0"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowInventoryModal(null);
+                  setInventoryValue("");
+                }}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleInventoryUpdate(showInventoryModal)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Product Detail Modal */}
       <Dialog
@@ -577,9 +977,12 @@ export default function Products() {
                 )}
 
                 <div className="flex gap-3 pt-4 border-t">
-                  <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-md transition-colors font-medium">
-                    Add to Cart
-                  </button>
+                  {userRole === ROLES.CUSTOMER && (
+                    <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-md transition-colors font-medium">
+                      Add to Cart
+                    </button>
+                  )}
+                  
                   <button className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 px-6 rounded-md transition-colors font-medium">
                     Contact Us
                   </button>
