@@ -22,7 +22,7 @@ export default function Products() {
   const API_BASE =
     import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
 
-  useEffect(( ) => {
+  useEffect(() => {
     async function loadProducts() {
       try {
         setLoading(true);
