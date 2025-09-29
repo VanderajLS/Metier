@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function AdminProductUpload() {
-  const navigate = useNavigate(); // Add navigate for redirection
+  const navigate = useNavigate();
   const [infoFile, setInfoFile] = useState(null);
   const [productFiles, setProductFiles] = useState([]);
   const [previewInfo, setPreviewInfo] = useState("");
   const [previewProducts, setPreviewProducts] = useState([]);
+  const [mainImageIndex, setMainImageIndex] = useState(0); // Track which image is the main one
   const [fields, setFields] = useState({
     name: "",
     sku: "",
@@ -23,7 +24,7 @@ export default function AdminProductUpload() {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [currentStep, setCurrentStep] = useState(1); // 1: Images, 2: Details, 3: Review
-  const [showSuccessModal, setShowSuccessModal] = useState(false); // Add success modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const API_BASE =
     import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
@@ -152,21 +153,29 @@ export default function AdminProductUpload() {
     try {
       setBusy(true);
       showMessage("Saving product...", "info");
+      
+      // Reorder product images to put the main image first
+      let orderedImages = [...previewProducts];
+      if (orderedImages.length > 0 && mainImageIndex < orderedImages.length) {
+        // Move the main image to the front
+        const mainImage = orderedImages[mainImageIndex];
+        orderedImages.splice(mainImageIndex, 1);
+        orderedImages.unshift(mainImage);
+      }
+      
       const res = await fetch(`${API_BASE}/api/admin/products`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...fields,
-          product_images: previewProducts,
+          product_images: orderedImages, // Use the reordered images
         }),
       });
       if (!res.ok) throw new Error("Failed to save product");
       
-      // Show success modal instead of just a message
+      // Show success modal
       setShowSuccessModal(true);
       
-      // Reset form after user acknowledges success
-      // Form reset moved to the modal close handler
     } catch (e) {
       showMessage(`Save failed: ${e.message}`, "error");
       setBusy(false);
@@ -195,6 +204,7 @@ export default function AdminProductUpload() {
     setPreviewProducts([]);
     setFeedback("");
     setCurrentStep(1);
+    setMainImageIndex(0);
     setBusy(false);
   };
 
@@ -211,7 +221,7 @@ export default function AdminProductUpload() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
               <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#1e293b' }}>
-                Metier CX Admin
+                Metier Turbo Admin
               </h2>
               <div style={{ display: 'flex', gap: '24px' }}>
                 <Link 
@@ -385,8 +395,15 @@ export default function AdminProductUpload() {
                   color: '#334155', 
                   marginBottom: '12px' 
                 }}>
-                  Main Product Image
+                  AI Description Image
                 </h3>
+                <p style={{ 
+                  color: '#64748b', 
+                  fontSize: '14px',
+                  marginBottom: '16px'
+                }}>
+                  This image is used only for AI to generate product details. It will not be displayed in the product gallery.
+                </p>
                 <div style={{ 
                   display: 'flex', 
                   flexDirection: 'column', 
@@ -419,7 +436,7 @@ export default function AdminProductUpload() {
                       fontWeight: '500'
                     }}
                   >
-                    Upload Main Image
+                    Upload AI Description Image
                   </button>
                   {previewInfo && (
                     <div style={{ marginTop: '16px' }}>
@@ -451,6 +468,13 @@ export default function AdminProductUpload() {
                 }}>
                   Product Gallery Images
                 </h3>
+                <p style={{ 
+                  color: '#64748b', 
+                  fontSize: '14px',
+                  marginBottom: '16px'
+                }}>
+                  These images will be displayed in the product gallery. Select a main image to be displayed as the primary product image.
+                </p>
                 <div style={{ 
                   display: 'flex', 
                   flexDirection: 'column', 
@@ -486,29 +510,77 @@ export default function AdminProductUpload() {
                   >
                     Upload Gallery Images
                   </button>
+                  
+                  {/* Gallery Images with Main Image Selection */}
                   {previewProducts.length > 0 && (
-                    <div style={{ 
-                      marginTop: '16px',
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '12px'
-                    }}>
-                      {previewProducts.map((url, i) => (
-                        <img
-                          key={i}
-                          src={url}
-                          alt={`Product ${i + 1}`}
-                          style={{
-                            width: '100px',
-                            height: '100px',
-                            objectFit: 'cover',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '8px',
-                            padding: '4px',
-                            backgroundColor: '#f8fafc'
-                          }}
-                        />
-                      ))}
+                    <div style={{ width: '100%', marginTop: '16px' }}>
+                      <h4 style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600', 
+                        color: '#334155', 
+                        marginBottom: '8px' 
+                      }}>
+                        Select Main Product Image:
+                      </h4>
+                      <div style={{ 
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '12px'
+                      }}>
+                        {previewProducts.map((url, i) => (
+                          <div 
+                            key={i}
+                            onClick={() => setMainImageIndex(i)}
+                            style={{
+                              position: 'relative',
+                              width: '100px',
+                              height: '100px',
+                              border: mainImageIndex === i ? '3px solid #3b82f6' : '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              padding: '4px',
+                              cursor: 'pointer',
+                              backgroundColor: mainImageIndex === i ? '#eff6ff' : '#f8fafc'
+                            }}
+                          >
+                            <img
+                              src={url}
+                              alt={`Product ${i + 1}`}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                borderRadius: '4px'
+                              }}
+                            />
+                            {mainImageIndex === i && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '-10px',
+                                right: '-10px',
+                                backgroundColor: '#3b82f6',
+                                color: 'white',
+                                borderRadius: '50%',
+                                width: '24px',
+                                height: '24px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '12px',
+                                fontWeight: 'bold'
+                              }}>
+                                ✓
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p style={{ 
+                        color: '#64748b', 
+                        fontSize: '12px',
+                        marginTop: '8px'
+                      }}>
+                        Click on an image to set it as the main product image. The main image will be displayed first in the product gallery.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -814,6 +886,13 @@ export default function AdminProductUpload() {
                     resize: 'vertical'
                   }}
                 />
+                <p style={{ 
+                  color: '#64748b', 
+                  fontSize: '12px',
+                  marginTop: '8px'
+                }}>
+                  Use **bold text** for specification labels. Each specification should be on a new line.
+                </p>
               </div>
 
               {/* Description */}
@@ -843,6 +922,13 @@ export default function AdminProductUpload() {
                     resize: 'vertical'
                   }}
                 />
+                <p style={{ 
+                  color: '#64748b', 
+                  fontSize: '12px',
+                  marginTop: '8px'
+                }}>
+                  Use **bold text** for emphasis. Paragraphs should be separated by blank lines.
+                </p>
               </div>
 
               {/* Navigation Buttons */}
@@ -927,7 +1013,7 @@ export default function AdminProductUpload() {
                       flexShrink: 0
                     }}>
                       <img
-                        src={previewInfo || "/placeholder.png"}
+                        src={previewProducts[mainImageIndex] || "/placeholder.png"}
                         alt="Product"
                         style={{
                           width: '100%',
@@ -1011,17 +1097,40 @@ export default function AdminProductUpload() {
                         gap: '8px'
                       }}>
                         {previewProducts.map((url, i) => (
-                          <img
+                          <div 
                             key={i}
-                            src={url}
-                            alt={`Product ${i + 1}`}
                             style={{
+                              position: 'relative',
                               width: '60px',
                               height: '60px',
-                              objectFit: 'cover',
-                              borderRadius: '4px'
+                              border: mainImageIndex === i ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                              borderRadius: '4px',
+                              overflow: 'hidden'
                             }}
-                          />
+                          >
+                            <img
+                              src={url}
+                              alt={`Product ${i + 1}`}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                              }}
+                            />
+                            {mainImageIndex === i && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '0',
+                                right: '0',
+                                backgroundColor: '#3b82f6',
+                                color: 'white',
+                                fontSize: '10px',
+                                padding: '2px 4px'
+                              }}>
+                                Main
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
