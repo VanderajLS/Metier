@@ -9,6 +9,10 @@ export default function ProductDetail() {
   const [error, setError] = useState("");
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [showFitmentChat, setShowFitmentChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [userInput, setUserInput] = useState("");
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
 
   // Check if user is admin - simplified version that doesn't rely on auth.js
   const isAdmin = () => {
@@ -87,6 +91,124 @@ export default function ProductDetail() {
     formatted = formatted.replace(/\n/g, '<br>');
     
     return formatted;
+  };
+
+  // Open fitment chat
+  const openFitmentChat = () => {
+    setShowFitmentChat(true);
+    // Add initial AI message
+    setChatMessages([
+      {
+        role: "assistant",
+        content: `I can help you with fitment for ${product.name}. Please provide a VIN, OE #, or general vehicle information.`
+      }
+    ]);
+  };
+
+  // Close fitment chat
+  const closeFitmentChat = () => {
+    setShowFitmentChat(false);
+  };
+
+  // Send message to AI
+  const sendMessage = async () => {
+    if (!userInput.trim()) return;
+    
+    const userMessage = userInput.trim();
+    setUserInput("");
+    setIsSendingMessage(true);
+    
+    // Add user message to chat
+    setChatMessages(prev => [...prev, { role: "user", content: userMessage }]);
+    
+    try {
+      // Simulate AI response (in a real implementation, this would call OpenAI API)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      let aiResponse;
+      
+      // Check if the message is about the product or fitment
+      if (isProductRelatedQuestion(userMessage, product)) {
+        // Generate a response about the product or fitment
+        aiResponse = generateFitmentResponse(userMessage, product);
+      } else {
+        // Not related to the product
+        aiResponse = "I'm sorry, but I'm only able to answer questions about Metier products.";
+      }
+      
+      // Add AI response to chat
+      setChatMessages(prev => [...prev, { role: "assistant", content: aiResponse }]);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setChatMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: "I'm sorry, I encountered an error processing your request. Please try again." 
+      }]);
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  // Check if the message is related to the product
+  const isProductRelatedQuestion = (message, product) => {
+    const lowerMessage = message.toLowerCase();
+    const productTerms = [
+      product.name.toLowerCase(),
+      "fitment",
+      "fit",
+      "compatible",
+      "work with",
+      "vehicle",
+      "car",
+      "truck",
+      "suv",
+      "vin",
+      "year",
+      "make",
+      "model",
+      "engine",
+      "turbo",
+      "turbocharger",
+      "specs",
+      "specifications",
+      "dimensions",
+      "size",
+      "weight",
+      "install",
+      "installation",
+      "warranty"
+    ];
+    
+    return productTerms.some(term => lowerMessage.includes(term));
+  };
+
+  // Generate a fitment response
+  const generateFitmentResponse = (message, product) => {
+    const lowerMessage = message.toLowerCase();
+    
+    // Check for VIN patterns (simplified)
+    const vinPattern = /\b[A-HJ-NPR-Z0-9]{17}\b/i;
+    const hasVin = vinPattern.test(message);
+    
+    // Check for vehicle year/make/model patterns
+    const yearPattern = /\b(19|20)\d{2}\b/;
+    const hasYear = yearPattern.test(message);
+    const commonMakes = ["ford", "chevy", "chevrolet", "toyota", "honda", "bmw", "audi", "mercedes", "subaru", "mitsubishi", "dodge", "ram", "jeep", "nissan", "mazda", "volkswagen", "vw", "porsche"];
+    const hasMake = commonMakes.some(make => lowerMessage.includes(make));
+    
+    if (hasVin) {
+      // VIN provided
+      return `Thank you for providing your VIN. Based on the vehicle information, the ${product.name} is compatible with your vehicle. This product is designed to enhance performance while maintaining reliability. Would you like installation recommendations?`;
+    } else if (hasYear && hasMake) {
+      // Year and make provided
+      return `Based on the vehicle information you provided, the ${product.name} is compatible with your vehicle. This product is specifically designed for your application and will provide optimal performance. Would you like more details about installation or performance expectations?`;
+    } else if (lowerMessage.includes("fit") || lowerMessage.includes("compatible") || lowerMessage.includes("work with")) {
+      // General fitment question
+      return `The ${product.name} is compatible with various vehicles. For the most accurate fitment information, please provide your vehicle's year, make, model, and engine specifications or a VIN number. This will allow me to give you specific compatibility details.`;
+    } else {
+      // Other product-related question
+      return `The ${product.name} is a high-quality performance part designed for optimal durability and performance. To check if it's compatible with your specific vehicle, please provide your vehicle's year, make, model, and engine specifications or a VIN number.`;
+    }
   };
 
   if (loading) {
@@ -383,7 +505,8 @@ export default function ProductDetail() {
                 display: 'flex', 
                 gap: '12px',
                 overflowX: 'auto',
-                padding: '4px'
+                padding: '4px',
+                marginBottom: '16px'
               }}>
                 {productImages.map((image, index) => (
                   <button
@@ -417,6 +540,32 @@ export default function ProductDetail() {
                 ))}
               </div>
             )}
+            
+            {/* Check Fitment Button */}
+            <button 
+              onClick={openFitmentChat}
+              style={{
+                width: '100%',
+                padding: '12px',
+                backgroundColor: '#f97316',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '16px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path>
+                <circle cx="12" cy="13" r="3"></circle>
+              </svg>
+              Check Fitment
+            </button>
           </div>
           
           {/* Right Column - Product Details */}
@@ -709,10 +858,199 @@ export default function ProductDetail() {
         </div>
       </div>
 
+      {/* Fitment Chat Modal */}
+      {showFitmentChat && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          width: '360px',
+          maxWidth: 'calc(100vw - 48px)',
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 1000,
+          border: '1px solid #e5e7eb',
+          maxHeight: '600px'
+        }}>
+          {/* Chat Header */}
+          <div style={{
+            padding: '16px',
+            borderBottom: '1px solid #e5e7eb',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                backgroundColor: '#f97316',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white'
+              }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path>
+                  <circle cx="12" cy="13" r="3"></circle>
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                  Fitment Assistant
+                </h3>
+                <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+                  For {product.name}
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={closeFitmentChat}
+              style={{
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                color: '#6b7280'
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18"></path>
+                <path d="m6 6 12 12"></path>
+              </svg>
+            </button>
+          </div>
+          
+          {/* Chat Messages */}
+          <div style={{
+            padding: '16px',
+            overflowY: 'auto',
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            {chatMessages.map((message, index) => (
+              <div 
+                key={index}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: message.role === 'user' ? 'flex-end' : 'flex-start'
+                }}
+              >
+                <div style={{
+                  backgroundColor: message.role === 'user' ? '#2563eb' : '#f3f4f6',
+                  color: message.role === 'user' ? 'white' : '#111827',
+                  padding: '12px 16px',
+                  borderRadius: message.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                  maxWidth: '80%',
+                  fontSize: '14px',
+                  lineHeight: '1.5'
+                }}>
+                  {message.content}
+                </div>
+              </div>
+            ))}
+            
+            {isSendingMessage && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 0'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#6b7280',
+                  borderRadius: '50%',
+                  animation: 'pulse 1.5s infinite'
+                }}></div>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#6b7280',
+                  borderRadius: '50%',
+                  animation: 'pulse 1.5s infinite 0.3s'
+                }}></div>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#6b7280',
+                  borderRadius: '50%',
+                  animation: 'pulse 1.5s infinite 0.6s'
+                }}></div>
+              </div>
+            )}
+          </div>
+          
+          {/* Chat Input */}
+          <div style={{
+            padding: '16px',
+            borderTop: '1px solid #e5e7eb',
+            display: 'flex',
+            gap: '8px'
+          }}>
+            <input 
+              type="text"
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+              placeholder="Enter VIN or vehicle details..."
+              style={{
+                flex: '1',
+                padding: '10px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                outline: 'none'
+              }}
+            />
+            <button 
+              onClick={sendMessage}
+              disabled={isSendingMessage || !userInput.trim()}
+              style={{
+                backgroundColor: '#f97316',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: isSendingMessage || !userInput.trim() ? 'not-allowed' : 'pointer',
+                opacity: isSendingMessage || !userInput.trim() ? 0.7 : 1
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m22 2-7 20-4-9-9-4Z"></path>
+                <path d="M22 2 11 13"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 0.5; transform: scale(0.8); }
+          50% { opacity: 1; transform: scale(1); }
         }
       `}</style>
     </div>
