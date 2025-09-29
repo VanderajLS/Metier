@@ -2,13 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function Products() {
-  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
+  const [viewMode, setViewMode] = useState("grid"); // grid or list
+  
+  const navigate = useNavigate();
 
   // Check if user is admin - simplified version that doesn't rely on auth.js
   const isAdmin = () => {
@@ -41,30 +44,42 @@ export default function Products() {
     loadProducts();
   }, [API_BASE]);
 
-  // Filter products based on search term and category
   useEffect(() => {
-    let result = [...products];
+    // Filter products based on search term and category
+    let filtered = [...products];
     
-    // Filter by search term
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(
-        product =>
-          (product.name && product.name.toLowerCase().includes(term)) ||
-          (product.description && product.description.toLowerCase().includes(term)) ||
-          (product.sku && product.sku.toLowerCase().includes(term))
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (product) =>
+          (product.name && product.name.toLowerCase().includes(search)) ||
+          (product.description && product.description.toLowerCase().includes(search)) ||
+          (product.sku && product.sku.toLowerCase().includes(search)) ||
+          (product.specs && product.specs.toLowerCase().includes(search))
       );
     }
     
-    // Filter by category
-    if (selectedCategory && selectedCategory !== "all") {
-      result = result.filter(
-        product => product.category === selectedCategory
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter(
+        (product) => product.category === selectedCategory
       );
     }
     
-    setFilteredProducts(result);
-  }, [searchTerm, selectedCategory, products]);
+    // Sort products
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "price_low":
+          return (a.discountPrice || a.price) - (b.discountPrice || b.price);
+        case "price_high":
+          return (b.discountPrice || b.price) - (a.discountPrice || a.price);
+        case "name":
+        default:
+          return a.name?.localeCompare(b.name);
+      }
+    });
+    
+    setFilteredProducts(filtered);
+  }, [products, searchTerm, selectedCategory, sortBy]);
 
   const formatPrice = (price) => {
     const numPrice = parseFloat(price);
@@ -75,15 +90,29 @@ export default function Products() {
     if (product.product_images && product.product_images.length > 0) {
       return product.product_images[0];
     }
+    if (product.image_url) {
+      return product.image_url;
+    }
     return "/placeholder.png";
   };
 
-  // Get unique categories from products
-  const categories = ["all", ...new Set(products.map(product => product.category).filter(Boolean))];
+  const getCategories = () => {
+    const categories = new Set();
+    products.forEach((product) => {
+      if (product.category) {
+        categories.add(product.category);
+      }
+    });
+    return ["all", ...Array.from(categories)];
+  };
 
-  // Handle product click to navigate to detail page
   const handleProductClick = (productId) => {
     navigate(`/products/${productId}`);
+  };
+
+  const getCategoryDisplayName = (category) => {
+    if (category === "all") return "All Categories";
+    return category.charAt(0).toUpperCase() + category.slice(1);
   };
 
   if (loading) {
@@ -107,42 +136,6 @@ export default function Products() {
             margin: '0 auto 16px'
           }}></div>
           <p style={{ fontSize: '18px', color: '#6b7280' }}>Loading products...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        backgroundColor: '#f9fafb', 
-        padding: '24px',
-        fontFamily: 'Inter, system-ui, sans-serif' // Sans-serif font
-      }}>
-        <div style={{ 
-          maxWidth: '1200px', 
-          margin: '0 auto', 
-          backgroundColor: '#fee2e2', 
-          padding: '16px', 
-          borderRadius: '8px',
-          border: '1px solid #fecaca'
-        }}>
-          <h2 style={{ color: '#b91c1c', marginBottom: '8px' }}>Error Loading Products</h2>
-          <p style={{ color: '#ef4444', marginBottom: '16px' }}>{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            style={{
-              backgroundColor: '#dc2626',
-              color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            Try Again
-          </button>
         </div>
       </div>
     );
@@ -297,245 +290,363 @@ export default function Products() {
       {/* Main Content */}
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 16px' }}>
         {/* Find Your Perfect Part */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h1 style={{ 
-            fontSize: '36px', 
-            fontWeight: 'bold', 
-            color: '#111827', 
-            marginBottom: '24px' 
+        <h1 style={{ 
+          fontSize: '32px', 
+          fontWeight: '700', 
+          color: '#111827', 
+          textAlign: 'center',
+          marginBottom: '24px'
+        }}>
+          Find Your Perfect Part
+        </h1>
+
+        {/* Search Bar */}
+        <div style={{ 
+          maxWidth: '800px', 
+          margin: '0 auto', 
+          marginBottom: '32px',
+          position: 'relative'
+        }}>
+          <input 
+            type="text"
+            placeholder="Search by part number, vehicle, OEM manufacturer, or keyword..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              paddingRight: '48px',
+              fontSize: '16px',
+              border: '1px solid #d1d5db',
+              borderRadius: '9999px',
+              outline: 'none'
+            }}
+          />
+          <button style={{
+            position: 'absolute',
+            right: '4px',
+            top: '4px',
+            width: '40px',
+            height: '40px',
+            backgroundColor: '#8b5cf6',
+            border: 'none',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            cursor: 'pointer'
           }}>
-            Find Your Perfect Part
-          </h1>
-          
-          {/* Search Bar */}
-          <div style={{ 
-            maxWidth: '700px', 
-            margin: '0 auto', 
-            position: 'relative' 
-          }}>
-            <input
-              type="text"
-              placeholder="Search by part number, vehicle, OEM manufacturer, or keyword..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '16px 24px',
-                paddingRight: '56px',
-                fontSize: '16px',
-                border: '1px solid #d1d5db',
-                borderRadius: '9999px',
-                outline: 'none',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-              }}
-            />
-            <button style={{
-              position: 'absolute',
-              right: '8px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              backgroundColor: '#8b5cf6',
-              color: 'white',
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 12a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"></path>
-                <path d="m21 21-4.35-4.35"></path>
-              </svg>
-            </button>
-          </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"></path>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+          </button>
         </div>
 
         {/* Category Buttons */}
         <div style={{ 
           display: 'flex', 
           flexWrap: 'wrap', 
-          gap: '12px', 
+          gap: '12px',
           justifyContent: 'center',
           marginBottom: '32px'
         }}>
-          <button
+          <button 
             onClick={() => setSelectedCategory("all")}
             style={{
-              padding: '10px 20px',
+              padding: '8px 16px',
               backgroundColor: selectedCategory === "all" ? '#f3f4f6' : '#f9fafb',
               border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              borderRadius: '9999px',
               fontSize: '14px',
-              fontWeight: selectedCategory === "all" ? '600' : '400',
               color: '#374151',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontWeight: selectedCategory === "all" ? '500' : 'normal'
             }}
           >
-            All Products
+            All Categories
           </button>
-          <button
+          <button 
             onClick={() => setSelectedCategory("Electronics")}
             style={{
-              padding: '10px 20px',
+              padding: '8px 16px',
               backgroundColor: selectedCategory === "Electronics" ? '#f3f4f6' : '#f9fafb',
               border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              borderRadius: '9999px',
               fontSize: '14px',
-              fontWeight: selectedCategory === "Electronics" ? '600' : '400',
               color: '#374151',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontWeight: selectedCategory === "Electronics" ? '500' : 'normal'
             }}
           >
             Electronics
           </button>
-          <button
+          <button 
             onClick={() => setSelectedCategory("Exhaust Systems")}
             style={{
-              padding: '10px 20px',
+              padding: '8px 16px',
               backgroundColor: selectedCategory === "Exhaust Systems" ? '#f3f4f6' : '#f9fafb',
               border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              borderRadius: '9999px',
               fontSize: '14px',
-              fontWeight: selectedCategory === "Exhaust Systems" ? '600' : '400',
               color: '#374151',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontWeight: selectedCategory === "Exhaust Systems" ? '500' : 'normal'
             }}
           >
             Exhaust Systems
           </button>
-          <button
+          <button 
             onClick={() => setSelectedCategory("Intake Systems")}
             style={{
-              padding: '10px 20px',
+              padding: '8px 16px',
               backgroundColor: selectedCategory === "Intake Systems" ? '#f3f4f6' : '#f9fafb',
               border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              borderRadius: '9999px',
               fontSize: '14px',
-              fontWeight: selectedCategory === "Intake Systems" ? '600' : '400',
               color: '#374151',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontWeight: selectedCategory === "Intake Systems" ? '500' : 'normal'
             }}
           >
             Intake Systems
           </button>
-          <button
+          <button 
             onClick={() => setSelectedCategory("Intercoolers")}
             style={{
-              padding: '10px 20px',
+              padding: '8px 16px',
               backgroundColor: selectedCategory === "Intercoolers" ? '#f3f4f6' : '#f9fafb',
               border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              borderRadius: '9999px',
               fontSize: '14px',
-              fontWeight: selectedCategory === "Intercoolers" ? '600' : '400',
               color: '#374151',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontWeight: selectedCategory === "Intercoolers" ? '500' : 'normal'
             }}
           >
             Intercoolers
           </button>
-          <button
+          <button 
             onClick={() => setSelectedCategory("Turbocharger Components")}
             style={{
-              padding: '10px 20px',
+              padding: '8px 16px',
               backgroundColor: selectedCategory === "Turbocharger Components" ? '#f3f4f6' : '#f9fafb',
               border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              borderRadius: '9999px',
               fontSize: '14px',
-              fontWeight: selectedCategory === "Turbocharger Components" ? '600' : '400',
               color: '#374151',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontWeight: selectedCategory === "Turbocharger Components" ? '500' : 'normal'
             }}
           >
             Turbocharger Components
           </button>
-          <button
+          <button 
             onClick={() => setSelectedCategory("Turbochargers")}
             style={{
-              padding: '10px 20px',
+              padding: '8px 16px',
               backgroundColor: selectedCategory === "Turbochargers" ? '#f3f4f6' : '#f9fafb',
               border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              borderRadius: '9999px',
               fontSize: '14px',
-              fontWeight: selectedCategory === "Turbochargers" ? '600' : '400',
               color: '#374151',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontWeight: selectedCategory === "Turbochargers" ? '500' : 'normal'
             }}
           >
             Turbochargers
           </button>
         </div>
 
-        {/* Filter Bar */}
+        {/* Filters and View Toggle */}
         <div style={{ 
           display: 'flex', 
-          justifyContent: 'space-between', 
+          justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '24px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#6b7280' }}>
-              <path d="M3 6h18"></path>
-              <path d="M7 12h10"></path>
-              <path d="M10 18h4"></path>
-            </svg>
-            <span style={{ fontWeight: '500', color: '#374151' }}>Filters</span>
-          </div>
-          <div style={{ color: '#6b7280', fontSize: '14px' }}>
-            {filteredProducts.length} products found
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#6b7280', fontSize: '14px' }}>Sort by:</span>
-            <select style={{
-              padding: '8px 12px',
+            <button style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              backgroundColor: 'white',
               border: '1px solid #d1d5db',
               borderRadius: '6px',
-              backgroundColor: 'white',
               fontSize: '14px',
-              color: '#374151'
+              color: '#374151',
+              cursor: 'pointer'
             }}>
-              <option>Best Match</option>
-              <option>Price: Low to High</option>
-              <option>Price: High to Low</option>
-              <option>Newest</option>
-            </select>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M7 12h10"></path>
+                <path d="M10 18h4"></path>
+              </svg>
+              Filters
+            </button>
+            <span style={{ fontSize: '14px', color: '#6b7280' }}>
+              {filteredProducts.length} products found
+            </span>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px', color: '#6b7280' }}>Sort by:</span>
+              <select 
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  color: '#374151',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="name">Name</option>
+                <option value="price_low">Price: Low to High</option>
+                <option value="price_high">Price: High to Low</option>
+              </select>
+            </div>
+            
+            {/* View Toggle */}
+            <div style={{ 
+              display: 'flex', 
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              overflow: 'hidden'
+            }}>
+              <button 
+                onClick={() => setViewMode("grid")}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '36px',
+                  height: '36px',
+                  backgroundColor: viewMode === "grid" ? '#f3f4f6' : 'white',
+                  border: 'none',
+                  borderRight: '1px solid #d1d5db',
+                  cursor: 'pointer',
+                  color: viewMode === "grid" ? '#111827' : '#6b7280'
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="7" height="7" x="3" y="3" rx="1"></rect>
+                  <rect width="7" height="7" x="14" y="3" rx="1"></rect>
+                  <rect width="7" height="7" x="14" y="14" rx="1"></rect>
+                  <rect width="7" height="7" x="3" y="14" rx="1"></rect>
+                </svg>
+              </button>
+              <button 
+                onClick={() => setViewMode("list")}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '36px',
+                  height: '36px',
+                  backgroundColor: viewMode === "list" ? '#f3f4f6' : 'white',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: viewMode === "list" ? '#111827' : '#6b7280'
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" x2="21" y1="6" y2="6"></line>
+                  <line x1="8" x2="21" y1="12" y2="12"></line>
+                  <line x1="8" x2="21" y1="18" y2="18"></line>
+                  <line x1="3" x2="3.01" y1="6" y2="6"></line>
+                  <line x1="3" x2="3.01" y1="12" y2="12"></line>
+                  <line x1="3" x2="3.01" y1="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Product Grid */}
-        {filteredProducts.length === 0 ? (
+        {/* Error Message */}
+        {error && (
           <div style={{ 
-            textAlign: 'center', 
-            padding: '48px 0', 
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            border: '1px solid #e5e7eb'
+            backgroundColor: '#fee2e2', 
+            border: '1px solid #fecaca', 
+            borderRadius: '8px', 
+            padding: '16px', 
+            marginBottom: '24px' 
           }}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#9ca3af', margin: '0 auto 16px' }}>
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.35-4.35"></path>
-            </svg>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>No products found</h3>
-            <p style={{ color: '#6b7280', maxWidth: '400px', margin: '0 auto' }}>
-              We couldn't find any products matching your search. Try using different keywords or filters.
-            </p>
+            <p style={{ color: '#b91c1c', fontWeight: '500' }}>Error: {error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              style={{
+                marginTop: '8px',
+                padding: '8px 16px',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Try Again
+            </button>
           </div>
-        ) : (
+        )}
+
+        {/* No Products Found */}
+        {!loading && !error && filteredProducts.length === 0 && (
+          <div style={{ 
+            backgroundColor: '#f3f4f6', 
+            border: '1px solid #e5e7eb', 
+            borderRadius: '8px', 
+            padding: '32px', 
+            textAlign: 'center',
+            marginBottom: '24px' 
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+              No products found
+            </h3>
+            <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+              Try adjusting your search or filter criteria.
+            </p>
+            <button 
+              onClick={() => {
+                setSearchTerm("");
+                setSelectedCategory("all");
+              }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Clear Filters
+            </button>
+          </div>
+        )}
+
+        {/* Products Grid View */}
+        {viewMode === "grid" && (
           <div style={{ 
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: '24px'
           }}>
             {filteredProducts.map((product) => (
               <div 
-                key={product.id} 
+                key={product.id}
                 onClick={() => handleProductClick(product.id)}
                 style={{
                   backgroundColor: 'white',
-                  borderRadius: '12px',
                   border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
                   overflow: 'hidden',
                   transition: 'transform 0.2s, box-shadow 0.2s',
                   cursor: 'pointer',
@@ -543,106 +654,115 @@ export default function Products() {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+                  e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                {/* Admin Options Menu (visible only to admins) */}
+                {/* Admin Options */}
                 {isAdmin() && (
-                  <div style={{ 
-                    position: 'absolute', 
-                    top: '12px', 
-                    right: '12px', 
-                    zIndex: 10 
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    zIndex: 10
                   }}>
-                    <div style={{ position: 'relative' }}>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Toggle dropdown menu
-                        }}
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                          border: '1px solid #e5e7eb',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="1"></circle>
-                          <circle cx="12" cy="5" r="1"></circle>
-                          <circle cx="12" cy="19" r="1"></circle>
-                        </svg>
-                      </button>
-                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Toggle dropdown menu
+                      }}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                        border: '1px solid #e5e7eb',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="12" cy="5" r="1"></circle>
+                        <circle cx="12" cy="19" r="1"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Sale Badge */}
+                {product.discountPrice && product.discountPrice < product.price && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    left: '12px',
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    zIndex: 10
+                  }}>
+                    Sale
+                  </div>
+                )}
+
+                {/* Out of Stock Badge */}
+                {parseInt(product.inventory) <= 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    left: product.discountPrice && product.discountPrice < product.price ? '64px' : '12px',
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    zIndex: 10
+                  }}>
+                    Out of Stock
                   </div>
                 )}
 
                 {/* Product Image */}
                 <div style={{ 
-                  position: 'relative',
-                  width: '100%',
-                  height: '250px',
+                  height: '220px', 
                   backgroundColor: '#f9fafb',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '24px' // Added more padding for smaller image appearance
+                  padding: '24px'
                 }}>
-                  <img
-                    src={getProductImage(product)}
-                    alt={product.name || "Product"}
+                  <img 
+                    src={getProductImage(product)} 
+                    alt={product.name}
                     style={{
-                      maxWidth: '80%', // Reduced from 100% to 80%
-                      maxHeight: '80%', // Reduced from 100% to 80%
+                      maxWidth: '100%',
+                      maxHeight: '100%',
                       objectFit: 'contain'
                     }}
                   />
-                  
-                  {/* Sale Badge */}
-                  {product.discountPrice && product.discountPrice < product.price && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '12px',
-                      left: '12px',
-                      backgroundColor: '#ef4444',
-                      color: 'white',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      padding: '4px 8px',
-                      borderRadius: '4px'
-                    }}>
-                      Sale
-                    </div>
-                  )}
                 </div>
 
-                {/* Product Info */}
+                {/* Product Details */}
                 <div style={{ padding: '16px' }}>
-                  {/* Category */}
                   {product.category && (
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{
-                        fontSize: '12px',
-                        color: '#6b7280',
-                        backgroundColor: '#f3f4f6',
-                        padding: '2px 8px',
-                        borderRadius: '4px'
-                      }}>
-                        {product.category}
-                      </span>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: '#6b7280',
+                      marginBottom: '8px'
+                    }}>
+                      {product.category}
                     </div>
                   )}
                   
-                  {/* Product Name */}
                   <h3 style={{ 
                     fontSize: '16px', 
                     fontWeight: '600', 
@@ -650,10 +770,9 @@ export default function Products() {
                     marginBottom: '8px',
                     lineHeight: '1.4'
                   }}>
-                    {product.name || "Unnamed Product"}
+                    {product.name}
                   </h3>
                   
-                  {/* SKU */}
                   {product.sku && (
                     <div style={{ 
                       fontSize: '12px', 
@@ -664,7 +783,6 @@ export default function Products() {
                     </div>
                   )}
                   
-                  {/* Price */}
                   <div style={{ 
                     display: 'flex', 
                     alignItems: 'center', 
@@ -699,28 +817,254 @@ export default function Products() {
                     )}
                   </div>
                   
-                  {/* Add to Cart Button */}
                   <button style={{
                     width: '100%',
-                    padding: '10px',
-                    backgroundColor: '#2563eb',
+                    padding: '8px 16px',
+                    backgroundColor: parseInt(product.inventory) <= 0 ? '#d1d5db' : '#2563eb',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
                     fontSize: '14px',
                     fontWeight: '500',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#1d4ed8'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = '#2563eb'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Add to cart logic
-                  }}
-                  >
-                    Add to Cart
+                    cursor: parseInt(product.inventory) <= 0 ? 'not-allowed' : 'pointer'
+                  }}>
+                    {parseInt(product.inventory) <= 0 ? 'Out of Stock' : 'View Details'}
                   </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Products List View */}
+        {viewMode === "list" && (
+          <div style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            {filteredProducts.map((product) => (
+              <div 
+                key={product.id}
+                onClick={() => handleProductClick(product.id)}
+                style={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  display: 'flex'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                {/* Admin Options */}
+                {isAdmin() && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    zIndex: 10
+                  }}>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Toggle dropdown menu
+                      }}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                        border: '1px solid #e5e7eb',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="12" cy="5" r="1"></circle>
+                        <circle cx="12" cy="19" r="1"></circle>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Product Image */}
+                <div style={{ 
+                  width: '180px',
+                  height: '180px',
+                  backgroundColor: '#f9fafb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '16px',
+                  position: 'relative'
+                }}>
+                  {/* Sale Badge */}
+                  {product.discountPrice && product.discountPrice < product.price && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '8px',
+                      left: '8px',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      zIndex: 10
+                    }}>
+                      Sale
+                    </div>
+                  )}
+
+                  {/* Out of Stock Badge */}
+                  {parseInt(product.inventory) <= 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: product.discountPrice && product.discountPrice < product.price ? '40px' : '8px',
+                      left: '8px',
+                      backgroundColor: '#6b7280',
+                      color: 'white',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      zIndex: 10
+                    }}>
+                      Out of Stock
+                    </div>
+                  )}
+
+                  <img 
+                    src={getProductImage(product)} 
+                    alt={product.name}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      objectFit: 'contain'
+                    }}
+                  />
+                </div>
+
+                {/* Product Details */}
+                <div style={{ 
+                  flex: '1',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}>
+                  <div style={{ flex: '1' }}>
+                    {product.category && (
+                      <div style={{ 
+                        fontSize: '12px', 
+                        color: '#6b7280',
+                        marginBottom: '8px'
+                      }}>
+                        {product.category}
+                      </div>
+                    )}
+                    
+                    <h3 style={{ 
+                      fontSize: '18px', 
+                      fontWeight: '600', 
+                      color: '#111827',
+                      marginBottom: '8px',
+                      lineHeight: '1.4'
+                    }}>
+                      {product.name}
+                    </h3>
+                    
+                    {product.sku && (
+                      <div style={{ 
+                        fontSize: '12px', 
+                        color: '#6b7280',
+                        marginBottom: '8px'
+                      }}>
+                        SKU: {product.sku}
+                      </div>
+                    )}
+                    
+                    {/* Short Description */}
+                    {product.description && (
+                      <div style={{ 
+                        fontSize: '14px',
+                        color: '#4b5563',
+                        marginBottom: '16px',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {product.description.replace(/\*\*/g, '').substring(0, 120)}
+                        {product.description.length > 120 ? '...' : ''}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div style={{ 
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px'
+                    }}>
+                      {product.discountPrice && product.discountPrice < product.price ? (
+                        <>
+                          <span style={{ 
+                            fontSize: '20px', 
+                            fontWeight: '700', 
+                            color: '#059669' 
+                          }}>
+                            ${formatPrice(product.discountPrice)}
+                          </span>
+                          <span style={{ 
+                            fontSize: '16px', 
+                            color: '#6b7280', 
+                            textDecoration: 'line-through' 
+                          }}>
+                            ${formatPrice(product.price)}
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ 
+                          fontSize: '20px', 
+                          fontWeight: '700', 
+                          color: '#111827' 
+                        }}>
+                          ${formatPrice(product.price)}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <button style={{
+                      padding: '8px 16px',
+                      backgroundColor: parseInt(product.inventory) <= 0 ? '#d1d5db' : '#2563eb',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: parseInt(product.inventory) <= 0 ? 'not-allowed' : 'pointer'
+                    }}>
+                      {parseInt(product.inventory) <= 0 ? 'Out of Stock' : 'View Details'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
