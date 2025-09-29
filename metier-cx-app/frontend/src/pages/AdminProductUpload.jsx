@@ -1,7 +1,11 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 
 export default function AdminProductUpload() {
+  const { productId } = useParams(); // Get product ID from URL for editing
+  const navigate = useNavigate();
+  const isEditing = !!productId;
+
   const [infoFile, setInfoFile] = useState(null);
   const [productFiles, setProductFiles] = useState([]);
   const [previewInfo, setPreviewInfo] = useState("");
@@ -18,16 +22,62 @@ export default function AdminProductUpload() {
     image_url: ""
   });
   const [msg, setMsg] = useState("");
-  const [msgType, setMsgType] = useState("info"); // success, error, info
+  const [msgType, setMsgType] = useState("info");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [currentStep, setCurrentStep] = useState(1); // 1: Images, 2: Details, 3: Review
+  const [currentStep, setCurrentStep] = useState(1);
+  const [loading, setLoading] = useState(false);
 
-  const API_BASE =
-    import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
+
+  // Load product data if editing
+  useEffect(() => {
+    if (isEditing && productId) {
+      loadProductForEdit();
+    }
+  }, [productId, isEditing]);
+
+  const loadProductForEdit = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/api/admin/products/${productId}`);
+      if (!res.ok) throw new Error("Failed to load product");
+      
+      const product = await res.json();
+      
+      // Populate form fields
+      setFields({
+        name: product.name || "",
+        sku: product.sku || "",
+        category: product.category || "",
+        price: product.price?.toString() || "",
+        discountPrice: product.discountPrice?.toString() || "",
+        inventory: product.inventory?.toString() || "",
+        specs: product.specs || "",
+        description: product.description || "",
+        image_url: product.image_url || ""
+      });
+
+      // Set preview images
+      if (product.image_url) {
+        setPreviewInfo(product.image_url);
+      }
+      if (product.product_images && product.product_images.length > 0) {
+        setPreviewProducts(product.product_images);
+      }
+
+      setCurrentStep(2); // Skip to details step since images are already loaded
+      showMessage(`Loaded product "${product.name}" for editing`, "success");
+    } catch (e) {
+      showMessage(`Failed to load product: ${e.message}`, "error");
+      navigate("/products"); // Redirect back if product not found
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Helper to show messages with types
-  const showMessage = (message, type = "info" ) => {
+  const showMessage = (message, type = "info") => {
     setMsg(message);
     setMsgType(type);
     setTimeout(() => setMsg(""), 5000);
@@ -85,7 +135,7 @@ export default function AdminProductUpload() {
         const url = await presignAndUpload(file, "products/images");
         urls.push(url);
       }
-      setPreviewProducts(urls);
+      setPreviewProducts([...previewProducts, ...urls]); // Append to existing images
       showMessage("Product images uploaded successfully!", "success");
     } catch (e) {
       showMessage(`Upload failed: ${e.message}`, "error");
@@ -137,7 +187,7 @@ export default function AdminProductUpload() {
     }
   }
 
-  // --- Save product ---
+  // --- Save or Update product ---
   async function handleSave(e) {
     e.preventDefault();
     
@@ -149,42 +199,71 @@ export default function AdminProductUpload() {
 
     try {
       setBusy(true);
-      showMessage("Saving product...", "info");
-      const res = await fetch(`${API_BASE}/api/admin/products`, {
-        method: "POST",
+      showMessage(isEditing ? "Updating product..." : "Saving product...", "info");
+      
+      const url = isEditing 
+        ? `${API_BASE}/api/admin/products/${productId}`
+        : `${API_BASE}/api/admin/products`;
+      
+      const method = isEditing ? "PUT" : "POST";
+      
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...fields,
           product_images: previewProducts,
         }),
       });
-      if (!res.ok) throw new Error("Failed to save product");
       
-      showMessage("Product saved successfully! Check the catalog.", "success");
+      if (!res.ok) throw new Error(`Failed to ${isEditing ? 'update' : 'save'} product`);
       
-      // Reset form
-      setFields({
-        name: "",
-        sku: "",
-        category: "",
-        price: "",
-        discountPrice: "",
-        inventory: "",
-        specs: "",
-        description: "",
-        image_url: "",
-      });
-      setInfoFile(null);
-      setProductFiles([]);
-      setPreviewInfo("");
-      setPreviewProducts([]);
-      setFeedback("");
-      setCurrentStep(1);
+      showMessage(
+        isEditing 
+          ? "Product updated successfully!" 
+          : "Product saved successfully! Check the catalog.", 
+        "success"
+      );
+      
+      // Navigate back to products after successful save/update
+      setTimeout(() => {
+        navigate("/products");
+      }, 1500);
+      
     } catch (e) {
-      showMessage(`Save failed: ${e.message}`, "error");
+      showMessage(`${isEditing ? 'Update' : 'Save'} failed: ${e.message}`, "error");
     } finally {
       setBusy(false);
     }
+  }
+
+  // Handle cancel - go back to products
+  const handleCancel = () => {
+    navigate("/products");
+  };
+
+  // Remove image from gallery
+  const removeGalleryImage = (index) => {
+    setPreviewProducts(previewProducts.filter((_, i) => i !== index));
+  };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            border: '3px solid #e5e7eb',
+            borderTop: '3px solid #2563eb',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }}></div>
+          <p style={{ fontSize: '18px', color: '#6b7280' }}>Loading product...</p>
+        </div>
+      </div>
+    );
   }
 
   // --- UI ---
@@ -219,7 +298,7 @@ export default function AdminProductUpload() {
                 <Link 
                   to="/admin" 
                   style={{ 
-                    color: '#3b82f6', 
+                    color: isEditing ? '#64748b' : '#3b82f6', 
                     textDecoration: 'none', 
                     fontWeight: '500' 
                   }}
@@ -229,14 +308,14 @@ export default function AdminProductUpload() {
               </div>
             </div>
             <span style={{
-              backgroundColor: '#dbeafe',
-              color: '#1d4ed8',
+              backgroundColor: isEditing ? '#fef3c7' : '#dbeafe',
+              color: isEditing ? '#92400e' : '#1d4ed8',
               padding: '4px 12px',
               borderRadius: '16px',
               fontSize: '12px',
               fontWeight: '500'
             }}>
-              ✓ MODERN UI
+              {isEditing ? '✏️ EDITING MODE' : '✓ MODERN UI'}
             </span>
           </div>
         </div>
@@ -246,16 +325,40 @@ export default function AdminProductUpload() {
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
         {/* Page Header */}
         <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+            <button
+              onClick={handleCancel}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#f3f4f6',
+                color: '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              ← Back to Products
+            </button>
+          </div>
+          
           <h1 style={{ 
             fontSize: '32px', 
             fontWeight: 'bold', 
             color: '#1e293b', 
             margin: '0 0 8px 0' 
           }}>
-            Upload New Product
+            {isEditing ? `Edit Product: ${fields.name || 'Loading...'}` : 'Upload New Product'}
           </h1>
           <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
-            Add a new product to your catalog with AI-powered content generation
+            {isEditing 
+              ? 'Update product information and save changes'
+              : 'Add a new product to your catalog with AI-powered content generation'
+            }
           </p>
         </div>
 
@@ -374,7 +477,7 @@ export default function AdminProductUpload() {
                   color: '#6b7280', 
                   marginBottom: '12px' 
                 }}>
-                  Upload the primary product image for AI analysis and description generation
+                  {isEditing ? 'Update the primary product image' : 'Upload the primary product image for AI analysis and description generation'}
                 </p>
                 
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
@@ -447,7 +550,7 @@ export default function AdminProductUpload() {
                   color: '#6b7280', 
                   marginBottom: '12px' 
                 }}>
-                  Upload additional product images for the gallery (optional)
+                  {isEditing ? 'Add more product images to the gallery' : 'Upload additional product images for the gallery (optional)'}
                 </p>
                 
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
@@ -495,81 +598,108 @@ export default function AdminProductUpload() {
                     border: '1px solid #e5e7eb'
                   }}>
                     {previewProducts.map((url, i) => (
-                      <img 
-                        key={i} 
-                        src={url} 
-                        alt={`Gallery ${i + 1}`} 
-                        style={{ 
-                          width: '100%', 
-                          height: '120px', 
-                          objectFit: 'cover',
-                          borderRadius: '6px',
-                          border: '1px solid #e5e7eb'
-                        }} 
-                      />
+                      <div key={i} style={{ position: 'relative' }}>
+                        <img 
+                          src={url} 
+                          alt={`Gallery ${i + 1}`} 
+                          style={{ 
+                            width: '100%', 
+                            height: '120px', 
+                            objectFit: 'cover',
+                            borderRadius: '6px',
+                            border: '1px solid #e5e7eb'
+                          }} 
+                        />
+                        {isEditing && (
+                          <button
+                            type="button"
+                            onClick={() => removeGalleryImage(i)}
+                            style={{
+                              position: 'absolute',
+                              top: '4px',
+                              right: '4px',
+                              width: '20px',
+                              height: '20px',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '50%',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* AI Generate Button */}
-              <div style={{ 
-                padding: '20px', 
-                backgroundColor: '#f8fafc', 
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0'
-              }}>
-                <h4 style={{ 
-                  fontSize: '16px', 
-                  fontWeight: '600', 
-                  color: '#1e293b', 
-                  margin: '0 0 8px 0' 
+              {/* AI Generate Button - Only show if not editing or if no content exists */}
+              {(!isEditing || !fields.name) && (
+                <div style={{ 
+                  padding: '20px', 
+                  backgroundColor: '#f8fafc', 
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0'
                 }}>
-                  🤖 AI Content Generation
-                </h4>
-                <p style={{ 
-                  fontSize: '14px', 
-                  color: '#64748b', 
-                  marginBottom: '16px' 
-                }}>
-                  Let AI analyze your product image and generate name, description, specifications, and other details automatically.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleDescribe}
-                  disabled={busy || !fields.image_url}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: busy || !fields.image_url ? '#e5e7eb' : '#8b5cf6',
-                    color: busy || !fields.image_url ? '#9ca3af' : 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: busy || !fields.image_url ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  {busy ? (
-                    <>
-                      <div style={{
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid transparent',
-                        borderTop: '2px solid currentColor',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>🚀 Generate with AI</>
-                  )}
-                </button>
-              </div>
+                  <h4 style={{ 
+                    fontSize: '16px', 
+                    fontWeight: '600', 
+                    color: '#1e293b', 
+                    margin: '0 0 8px 0' 
+                  }}>
+                    🤖 AI Content Generation
+                  </h4>
+                  <p style={{ 
+                    fontSize: '14px', 
+                    color: '#64748b', 
+                    marginBottom: '16px' 
+                  }}>
+                    Let AI analyze your product image and generate name, description, specifications, and other details automatically.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleDescribe}
+                    disabled={busy || !fields.image_url}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: busy || !fields.image_url ? '#e5e7eb' : '#8b5cf6',
+                      color: busy || !fields.image_url ? '#9ca3af' : 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: busy || !fields.image_url ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {busy ? (
+                      <>
+                        <div style={{
+                          width: '16px',
+                          height: '16px',
+                          border: '2px solid transparent',
+                          borderTop: '2px solid currentColor',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }} />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>🚀 Generate with AI</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Step 2: Product Details */}
@@ -812,57 +942,59 @@ export default function AdminProductUpload() {
               </div>
             </div>
 
-            {/* Step 3: Admin Feedback */}
-            <div style={{
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              padding: '32px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              border: '1px solid #e2e8f0'
-            }}>
-              <h3 style={{ 
-                fontSize: '20px', 
-                fontWeight: '600', 
-                color: '#1e293b', 
-                margin: '0 0 12px 0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
+            {/* Step 3: Admin Feedback - Only show for new products */}
+            {!isEditing && (
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '32px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                border: '1px solid #e2e8f0'
               }}>
-                💬 Admin Feedback
-              </h3>
-              <p style={{ 
-                fontSize: '14px', 
-                color: '#64748b', 
-                marginBottom: '16px' 
-              }}>
-                Provide feedback for future AI improvements (optional)
-              </p>
-              
-              <textarea
-                placeholder="Suggest corrections or improvements for AI-generated content..."
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                rows={3}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  backgroundColor: 'white',
-                  fontFamily: 'inherit',
-                  resize: 'vertical'
-                }}
-              />
-              <p style={{ 
-                fontSize: '12px', 
-                color: '#9ca3af', 
-                marginTop: '8px' 
-              }}>
-                This feedback will be used to improve future AI content generation
-              </p>
-            </div>
+                <h3 style={{ 
+                  fontSize: '20px', 
+                  fontWeight: '600', 
+                  color: '#1e293b', 
+                  margin: '0 0 12px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  💬 Admin Feedback
+                </h3>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#64748b', 
+                  marginBottom: '16px' 
+                }}>
+                  Provide feedback for future AI improvements (optional)
+                </p>
+                
+                <textarea
+                  placeholder="Suggest corrections or improvements for AI-generated content..."
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    backgroundColor: 'white',
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                />
+                <p style={{ 
+                  fontSize: '12px', 
+                  color: '#9ca3af', 
+                  marginTop: '8px' 
+                }}>
+                  This feedback will be used to improve future AI content generation
+                </p>
+              </div>
+            )}
 
             {/* Save Button */}
             <div style={{ 
@@ -874,25 +1006,7 @@ export default function AdminProductUpload() {
             }}>
               <button
                 type="button"
-                onClick={() => {
-                  setFields({
-                    name: "",
-                    sku: "",
-                    category: "",
-                    price: "",
-                    discountPrice: "",
-                    inventory: "",
-                    specs: "",
-                    description: "",
-                    image_url: "",
-                  });
-                  setInfoFile(null);
-                  setProductFiles([]);
-                  setPreviewInfo("");
-                  setPreviewProducts([]);
-                  setFeedback("");
-                  setCurrentStep(1);
-                }}
+                onClick={handleCancel}
                 style={{
                   padding: '12px 24px',
                   backgroundColor: 'white',
@@ -905,7 +1019,7 @@ export default function AdminProductUpload() {
                   transition: 'all 0.2s'
                 }}
               >
-                Clear Form
+                Cancel
               </button>
               
               <button 
@@ -936,10 +1050,10 @@ export default function AdminProductUpload() {
                       borderRadius: '50%',
                       animation: 'spin 1s linear infinite'
                     }} />
-                    Saving...
+                    {isEditing ? 'Updating...' : 'Saving...'}
                   </>
                 ) : (
-                  <>💾 Save Product</>
+                  <>{isEditing ? '💾 Update Product' : '💾 Save Product'}</>
                 )}
               </button>
             </div>
