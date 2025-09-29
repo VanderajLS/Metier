@@ -1,13 +1,5 @@
 import React, { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { Link, useNavigate } from "react-router-dom"; // Import useNavigate
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { isAdmin } from "./utils/auth"; // Import isAdmin for admin features
 
 export default function Products() {
   const navigate = useNavigate(); // Initialize navigate function
@@ -15,7 +7,6 @@ export default function Products() {
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortBy, setSortBy] = useState("name");
@@ -23,6 +14,12 @@ export default function Products() {
 
   const API_BASE =
     import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
+
+  // Check if user is admin - simplified version that doesn't rely on auth.js
+  const isAdmin = () => {
+    const role = sessionStorage.getItem("userRole");
+    return role === "admin";
+  };
 
   useEffect(() => {
     async function loadProducts() {
