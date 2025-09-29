@@ -9,7 +9,6 @@ import Products from "./pages/Products";
 import ProductDetail from "./pages/ProductDetail"; // Import the new ProductDetail component
 
 // Components
-import ProductDetailPage from "./components/ProductDetailPage";
 import ProtectedRoute, { AdminRoute, CustomerRoute } from "./components/ProtectedRoute";
 
 // Utils
@@ -28,15 +27,8 @@ function Home() {
     return <ComingSoon />;
   }
 
-  // If authenticated, redirect based on role
-  if (userRole === ROLES.ADMIN) {
-    return <Navigate to="/admin" replace />;
-  } else if (userRole === ROLES.CUSTOMER) {
-    return <Navigate to="/products" replace />;
-  }
-
-  // Fallback to coming soon if role is unclear
-  return <ComingSoon />;
+  // If authenticated, always redirect to products first (changed from admin)
+  return <Navigate to="/products" replace />;
 }
 
 // Enhanced Products page with role-based features
@@ -158,7 +150,7 @@ export default function App() {
         {/* Admin routes - require admin role */}
         <Route path="/admin" element={<EnhancedAdmin />} />
         
-        {/* Edit Product route - admin only */}
+        {/* NEW ROUTE: Edit Product - require admin role */}
         <Route 
           path="/admin/edit/:productId" 
           element={
