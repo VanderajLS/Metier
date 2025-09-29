@@ -1,80 +1,148 @@
 // frontend/src/App.jsx
-
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 // Pages
+import ComingSoon from "./pages/ComingSoon";
 import AdminProductUpload from "./pages/AdminProductUpload";
 import Products from "./pages/Products";
 
 // Components
 import ProductDetailPage from "./components/ProductDetailPage";
+import ProtectedRoute, { AdminRoute, CustomerRoute } from "./components/ProtectedRoute";
 
-// Navigation Bar
-function NavBar() {
-  return (
-    <nav
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "12px 24px",
-        backgroundColor: "#ffffff",
-        borderBottom: "1px solid #e5e7eb",
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
-      }}
-    >
-      {/* Branding */}
-      <Link to="/" style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#111827", textDecoration: "none" }}>
-        Metier Parts
-      </Link>
+// Utils
+import { isAuthenticated, getUserRole, ROLES } from "./utils/auth";
 
-      {/* Navigation Links */}
-      <div style={{ display: "flex", gap: "20px" }}>
-        <Link to="/products" style={{ color: "#374151", textDecoration: "none", fontWeight: "500" }}>
-          Products
-        </Link>
-        <Link to="/categories" style={{ color: "#374151", textDecoration: "none", fontWeight: "500" }}>
-          Categories
-        </Link>
-        <Link to="/fitment" style={{ color: "#374151", textDecoration: "none", fontWeight: "500" }}>
-          Fitment
-        </Link>
-        <Link to="/support" style={{ color: "#374151", textDecoration: "none", fontWeight: "500" }}>
-          Support
-        </Link>
-      </div>
+// Debug log
+console.log("DEBUG: App.jsx loaded with role-based routing");
 
-      {/* Icons (placeholder for now) */}
-      <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-        <button style={{ background: "none", border: "none", cursor: "pointer" }}>🔍</button>
-        <button style={{ background: "none", border: "none", cursor: "pointer" }}>🛒</button>
-        <button style={{ background: "none", border: "none", cursor: "pointer" }}>👤</button>
-      </div>
-    </nav>
-  );
-}
-
-// Placeholder home page
+// Home component that redirects based on authentication
 function Home() {
+  const authenticated = isAuthenticated();
+  const userRole = getUserRole();
+
+  // If not authenticated, show coming soon page
+  if (!authenticated) {
+    return <ComingSoon />;
+  }
+
+  // If authenticated, redirect based on role
+  if (userRole === ROLES.ADMIN) {
+    return <Navigate to="/admin" replace />;
+  } else if (userRole === ROLES.CUSTOMER) {
+    return <Navigate to="/products" replace />;
+  }
+
+  // Fallback to coming soon if role is unclear
+  return <ComingSoon />;
+}
+
+// Enhanced Products page with role-based features
+function EnhancedProducts() {
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-      <h1 className="text-3xl font-bold mb-4">Welcome to Metier Parts</h1>
-      <p>This is a placeholder Home page. Use the navigation above to explore.</p>
-    </div>
+    <CustomerRoute>
+      <Products />
+    </CustomerRoute>
   );
 }
 
-// Fallback 404
-function NotFound() {
+// Enhanced Admin page with admin-only access
+function EnhancedAdmin() {
   return (
-    <div style={{ padding: 40 }}>
-      <h2>Page Not Found</h2>
-      <Link to="/" style={{ color: "blue" }}>
-        Back to Home
-      </Link>
+    <AdminRoute>
+      <AdminProductUpload />
+    </AdminRoute>
+  );
+}
+
+// 404 Not Found page
+function NotFound() {
+  const authenticated = isAuthenticated();
+  const userRole = getUserRole();
+
+  return (
+    <div style={{ 
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#f8fafc',
+      padding: '24px'
+    }}>
+      <div style={{ 
+        textAlign: 'center',
+        maxWidth: '400px',
+        backgroundColor: 'white',
+        padding: '32px',
+        borderRadius: '12px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <h2 style={{ 
+          fontSize: '24px', 
+          fontWeight: 'bold', 
+          color: '#1e293b', 
+          marginBottom: '16px' 
+        }}>
+          Page Not Found
+        </h2>
+        <p style={{ 
+          color: '#64748b', 
+          marginBottom: '24px' 
+        }}>
+          The page you're looking for doesn't exist or you don't have permission to access it.
+        </p>
+        
+        {authenticated ? (
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            {userRole === ROLES.ADMIN && (
+              <a 
+                href="/admin" 
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  textDecoration: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                Admin Dashboard
+              </a>
+            )}
+            <a 
+              href="/products" 
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#10b981',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}
+            >
+              View Products
+            </a>
+          </div>
+        ) : (
+          <a 
+            href="/" 
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#6b7280',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            Back to Home
+          </a>
+        )}
+      </div>
     </div>
   );
 }
@@ -82,26 +150,63 @@ function NotFound() {
 export default function App() {
   return (
     <Router>
-      <NavBar />
       <Routes>
-        {/* Home */}
+        {/* Landing page - shows ComingSoon if not authenticated */}
         <Route path="/" element={<Home />} />
-
-        {/* Admin */}
-        <Route path="/admin" element={<AdminProductUpload />} />
-
-        {/* Product catalog */}
-        <Route path="/products" element={<Products />} />
-
-        {/* Product detail */}
-        <Route path="/products/:id" element={<ProductDetailPage />} />
-
-        {/* Placeholder routes for now */}
-        <Route path="/categories" element={<div style={{ padding: 40 }}>Categories page coming soon</div>} />
-        <Route path="/fitment" element={<div style={{ padding: 40 }}>Fitment page coming soon</div>} />
-        <Route path="/support" element={<div style={{ padding: 40 }}>Support page coming soon</div>} />
-
-        {/* Fallback */}
+        
+        {/* Admin routes - require admin role */}
+        <Route path="/admin" element={<EnhancedAdmin />} />
+        
+        {/* Customer routes - require authentication (admin or customer) */}
+        <Route path="/products" element={<EnhancedProducts />} />
+        <Route 
+          path="/products/:id" 
+          element={
+            <CustomerRoute>
+              <ProductDetailPage />
+            </CustomerRoute>
+          } 
+        />
+        
+        {/* Future admin routes */}
+        <Route 
+          path="/admin/products" 
+          element={
+            <AdminRoute>
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <h2>Product Management</h2>
+                <p>Coming soon - Edit and manage products</p>
+              </div>
+            </AdminRoute>
+          } 
+        />
+        
+        <Route 
+          path="/admin/orders" 
+          element={
+            <AdminRoute>
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <h2>Order Management</h2>
+                <p>Coming soon - View and manage customer orders</p>
+              </div>
+            </AdminRoute>
+          } 
+        />
+        
+        {/* Future customer routes */}
+        <Route 
+          path="/cart" 
+          element={
+            <CustomerRoute>
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <h2>Shopping Cart</h2>
+                <p>Coming soon - Add products and create purchase orders</p>
+              </div>
+            </CustomerRoute>
+          } 
+        />
+        
+        {/* Catch all - 404 page */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
