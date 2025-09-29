@@ -61,12 +61,7 @@ export default function ProductDetail() {
     
     const images = [];
     
-    // Add main product image if available
-    if (product.image_url) {
-      images.push(product.image_url);
-    }
-    
-    // Add product gallery images if available
+    // Only use product_images array, NOT the image_url (which is for AI description)
     if (product.product_images && Array.isArray(product.product_images)) {
       images.push(...product.product_images);
     }
@@ -77,6 +72,32 @@ export default function ProductDetail() {
     }
     
     return images;
+  };
+
+  // Format specifications with proper styling
+  const formatSpecs = (specs) => {
+    if (!specs) return "No specifications available.";
+    
+    // Replace markdown bold syntax with HTML
+    let formattedSpecs = specs.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert line breaks to HTML
+    formattedSpecs = formattedSpecs.replace(/\n/g, '<br>');
+    
+    return formattedSpecs;
+  };
+
+  // Format description with proper styling
+  const formatDescription = (description) => {
+    if (!description) return "No description available.";
+    
+    // Replace markdown bold syntax with HTML
+    let formattedDescription = description.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert line breaks to HTML
+    formattedDescription = formattedDescription.replace(/\n/g, '<br>');
+    
+    return formattedDescription;
   };
 
   const handleQuantityChange = (amount) => {
@@ -170,7 +191,7 @@ export default function ProductDetail() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
               <Link to="/" style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827', textDecoration: 'none' }}>
-                Metier CX
+                Metier Turbo
               </Link>
               <div style={{ display: 'flex', gap: '24px' }}>
                 <Link to="/products" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
@@ -396,14 +417,43 @@ export default function ProductDetail() {
               }}>
                 Product Specifications
               </h2>
-              <div style={{ 
-                whiteSpace: 'pre-wrap',
-                fontSize: '14px',
-                color: '#374151',
-                lineHeight: '1.5'
+              <div 
+                style={{ 
+                  fontSize: '14px',
+                  color: '#374151',
+                  lineHeight: '1.5'
+                }}
+                dangerouslySetInnerHTML={{ __html: formatSpecs(product.specs) }}
+              />
+            </div>
+
+            {/* Product Description */}
+            <div style={{ 
+              backgroundColor: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              padding: '16px',
+              marginBottom: '24px'
+            }}>
+              <h2 style={{ 
+                fontSize: '18px', 
+                fontWeight: '600', 
+                color: '#111827', 
+                marginTop: 0,
+                marginBottom: '16px',
+                paddingBottom: '8px',
+                borderBottom: '1px solid #e5e7eb'
               }}>
-                {product.specs || "No specifications available."}
-              </div>
+                Product Description
+              </h2>
+              <div 
+                style={{ 
+                  fontSize: '14px',
+                  color: '#374151',
+                  lineHeight: '1.5'
+                }}
+                dangerouslySetInnerHTML={{ __html: formatDescription(product.description) }}
+              />
             </div>
 
             {/* Quantity Selector */}
@@ -523,28 +573,6 @@ export default function ProductDetail() {
               }}>
                 <span>Warranty</span>
               </button>
-            </div>
-
-            {/* Product Description */}
-            <div style={{ marginBottom: '24px' }}>
-              <h2 style={{ 
-                fontSize: '20px', 
-                fontWeight: '600', 
-                color: '#111827', 
-                marginBottom: '16px',
-                paddingBottom: '8px',
-                borderBottom: '1px solid #e5e7eb'
-              }}>
-                Product Description
-              </h2>
-              <div style={{ 
-                fontSize: '16px',
-                color: '#374151',
-                lineHeight: '1.6',
-                whiteSpace: 'pre-wrap'
-              }}>
-                {product.description || "No description available."}
-              </div>
             </div>
           </div>
         </div>
