@@ -18,11 +18,20 @@ export default function AdminProductUpload() {
     image_url: ""
   });
   const [msg, setMsg] = useState("");
+  const [msgType, setMsgType] = useState("info"); // success, error, info
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState(""); // future admin prompt
+  const [feedback, setFeedback] = useState("");
+  const [currentStep, setCurrentStep] = useState(1); // 1: Images, 2: Details, 3: Review
 
   const API_BASE =
     import.meta.env.VITE_API_BASE_URL || "https://api.metierturbo.com";
+
+  // Helper to show messages with types
+  const showMessage = (message, type = "info" ) => {
+    setMsg(message);
+    setMsgType(type);
+    setTimeout(() => setMsg(""), 5000);
+  };
 
   // --- Helpers ---
   async function presignAndUpload(file, folder) {
@@ -53,13 +62,13 @@ export default function AdminProductUpload() {
     if (!infoFile) return;
     try {
       setBusy(true);
-      setMsg("Uploading description image...");
+      showMessage("Uploading description image...", "info");
       const url = await presignAndUpload(infoFile, "products/info");
       setPreviewInfo(url);
       setFields((f) => ({ ...f, image_url: url }));
-      setMsg("Description image uploaded!");
+      showMessage("Description image uploaded successfully!", "success");
     } catch (e) {
-      setMsg(`Info upload error: ${e.message}`);
+      showMessage(`Upload failed: ${e.message}`, "error");
     } finally {
       setBusy(false);
     }
@@ -70,16 +79,16 @@ export default function AdminProductUpload() {
     if (!productFiles.length) return;
     try {
       setBusy(true);
-      setMsg("Uploading product images...");
+      showMessage("Uploading product images...", "info");
       const urls = [];
       for (const file of productFiles) {
         const url = await presignAndUpload(file, "products/images");
         urls.push(url);
       }
       setPreviewProducts(urls);
-      setMsg("Product images uploaded!");
+      showMessage("Product images uploaded successfully!", "success");
     } catch (e) {
-      setMsg(`Product images error: ${e.message}`);
+      showMessage(`Upload failed: ${e.message}`, "error");
     } finally {
       setBusy(false);
     }
@@ -88,12 +97,12 @@ export default function AdminProductUpload() {
   // --- Generate fields with AI ---
   async function handleDescribe() {
     if (!fields.image_url) {
-      setMsg("Upload a description image first.");
+      showMessage("Please upload a description image first.", "error");
       return;
     }
     try {
       setBusy(true);
-      setMsg("Extracting details with AI...");
+      showMessage("Analyzing image with AI...", "info");
 
       const res = await fetch(`${API_BASE}/api/admin/ai/describe`, {
         method: "POST",
@@ -106,7 +115,7 @@ export default function AdminProductUpload() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "AI error");
+      if (!res.ok) throw new Error(data.message || "AI analysis failed");
 
       setFields((f) => ({
         ...f,
@@ -119,9 +128,10 @@ export default function AdminProductUpload() {
         inventory: data.inventory ?? f.inventory,
       }));
 
-      setMsg("AI details added. Review and edit as needed.");
+      showMessage("AI analysis complete! Please review and edit the generated details.", "success");
+      setCurrentStep(2);
     } catch (e) {
-      setMsg(`AI error: ${e.message}`);
+      showMessage(`AI analysis failed: ${e.message}`, "error");
     } finally {
       setBusy(false);
     }
@@ -130,9 +140,16 @@ export default function AdminProductUpload() {
   // --- Save product ---
   async function handleSave(e) {
     e.preventDefault();
+    
+    // Validation
+    if (!fields.name || !fields.price || !fields.category) {
+      showMessage("Please fill in all required fields (Name, Price, Category).", "error");
+      return;
+    }
+
     try {
       setBusy(true);
-      setMsg("Saving product...");
+      showMessage("Saving product...", "info");
       const res = await fetch(`${API_BASE}/api/admin/products`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -141,8 +158,11 @@ export default function AdminProductUpload() {
           product_images: previewProducts,
         }),
       });
-      if (!res.ok) throw new Error("Save failed");
-      setMsg("Product saved! Check the catalog.");
+      if (!res.ok) throw new Error("Failed to save product");
+      
+      showMessage("Product saved successfully! Check the catalog.", "success");
+      
+      // Reset form
       setFields({
         name: "",
         sku: "",
@@ -159,8 +179,9 @@ export default function AdminProductUpload() {
       setPreviewInfo("");
       setPreviewProducts([]);
       setFeedback("");
+      setCurrentStep(1);
     } catch (e) {
-      setMsg(`Save error: ${e.message}`);
+      showMessage(`Save failed: ${e.message}`, "error");
     } finally {
       setBusy(false);
     }
@@ -168,163 +189,770 @@ export default function AdminProductUpload() {
 
   // --- UI ---
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-      <nav style={{ marginBottom: 20 }}>
-        <Link to="/products" style={{ marginRight: 12 }}>View Products</Link>
-        <Link to="/admin">Admin Upload</Link>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+      {/* Header Navigation */}
+      <nav style={{ 
+        backgroundColor: 'white', 
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)', 
+        borderBottom: '1px solid #e2e8f0' 
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#1e293b' }}>
+                Metier CX Admin
+              </h2>
+              <div style={{ display: 'flex', gap: '24px' }}>
+                <Link 
+                  to="/products" 
+                  style={{ 
+                    color: '#64748b', 
+                    textDecoration: 'none', 
+                    fontWeight: '500',
+                    transition: 'color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.color = '#3b82f6'}
+                  onMouseLeave={(e) => e.target.style.color = '#64748b'}
+                >
+                  View Products
+                </Link>
+                <Link 
+                  to="/admin" 
+                  style={{ 
+                    color: '#3b82f6', 
+                    textDecoration: 'none', 
+                    fontWeight: '500' 
+                  }}
+                >
+                  Product Upload
+                </Link>
+              </div>
+            </div>
+            <span style={{
+              backgroundColor: '#dbeafe',
+              color: '#1d4ed8',
+              padding: '4px 12px',
+              borderRadius: '16px',
+              fontSize: '12px',
+              fontWeight: '500'
+            }}>
+              ✓ MODERN UI
+            </span>
+          </div>
+        </div>
       </nav>
 
-      <h1>Admin: Upload Product</h1>
-      <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
-        {/* Description image */}
-        <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
-          <legend>Description Image</legend>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setInfoFile(e.target.files?.[0] || null)}
-          />
-          <button type="button" onClick={handleInfoUpload} disabled={!infoFile || busy}>
-            {busy ? "Uploading..." : "Upload Info Image"}
-          </button>
-          {previewInfo && (
-            <img
-              src={previewInfo}
-              alt="info preview"
-              style={{ maxWidth: "100%", marginTop: 10 }}
-            />
-          )}
-        </fieldset>
+      {/* Main Content */}
+      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px 24px' }}>
+        {/* Page Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <h1 style={{ 
+            fontSize: '32px', 
+            fontWeight: 'bold', 
+            color: '#1e293b', 
+            margin: '0 0 8px 0' 
+          }}>
+            Upload New Product
+          </h1>
+          <p style={{ color: '#64748b', fontSize: '16px', margin: 0 }}>
+            Add a new product to your catalog with AI-powered content generation
+          </p>
+        </div>
 
-        {/* Gallery images */}
-        <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
-          <legend>Product Images</legend>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => setProductFiles(Array.from(e.target.files || []))}
-          />
-          <button
-            type="button"
-            onClick={handleProductUploads}
-            disabled={!productFiles.length || busy}
-          >
-            {busy ? "Uploading..." : "Upload Product Images"}
-          </button>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-            {previewProducts.map((url, i) => (
-              <img key={i} src={url} alt="prod preview" style={{ width: 120 }} />
-            ))}
-          </div>
-        </fieldset>
+        {/* Progress Steps */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          marginBottom: '40px',
+          backgroundColor: 'white',
+          padding: '24px',
+          borderRadius: '12px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
+          {[
+            { step: 1, title: 'Upload Images', desc: 'Add product photos' },
+            { step: 2, title: 'Product Details', desc: 'Fill in information' },
+            { step: 3, title: 'Review & Save', desc: 'Confirm and publish' }
+          ].map((item, index) => (
+            <div key={item.step} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                backgroundColor: currentStep >= item.step ? '#3b82f6' : '#e2e8f0',
+                color: currentStep >= item.step ? 'white' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold',
+                fontSize: '16px'
+              }}>
+                {item.step}
+              </div>
+              <div style={{ marginLeft: '12px', flex: 1 }}>
+                <div style={{ 
+                  fontWeight: '600', 
+                  color: currentStep >= item.step ? '#1e293b' : '#64748b',
+                  fontSize: '14px'
+                }}>
+                  {item.title}
+                </div>
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: '#64748b' 
+                }}>
+                  {item.desc}
+                </div>
+              </div>
+              {index < 2 && (
+                <div style={{
+                  height: '2px',
+                  backgroundColor: currentStep > item.step ? '#3b82f6' : '#e2e8f0',
+                  flex: 1,
+                  marginLeft: '16px'
+                }} />
+              )}
+            </div>
+          ))}
+        </div>
 
-        {/* Pricing */}
-        <label>
-          Standard Price<br />
-          <input
-            type="number"
-            step="0.01"
-            value={fields.price}
-            onChange={(e) => setFields((f) => ({ ...f, price: e.target.value }))}
-          />
-        </label>
-
-        <label>
-          Discount Price (optional)<br />
-          <input
-            type="number"
-            step="0.01"
-            value={fields.discountPrice}
-            onChange={(e) => setFields((f) => ({ ...f, discountPrice: e.target.value }))}
-          />
-        </label>
-
-        <label>
-          Inventory<br />
-          <input
-            type="number"
-            value={fields.inventory}
-            onChange={(e) => setFields((f) => ({ ...f, inventory: e.target.value }))}
-          />
-        </label>
-
-        {/* AI */}
-        <button
-          type="button"
-          onClick={handleDescribe}
-          disabled={busy || !fields.image_url}
-        >
-          {busy ? "Working..." : "Generate with AI"}
-        </button>
-
-        <label>
-          Name<br />
-          <input
-            value={fields.name}
-            onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
-          />
-        </label>
-
-        <label>
-          SKU<br />
-          <input
-            value={fields.sku}
-            onChange={(e) => setFields((f) => ({ ...f, sku: e.target.value }))}
-          />
-        </label>
-
-        <label>
-          Category<br />
-          <input
-            value={fields.category}
-            onChange={(e) => setFields((f) => ({ ...f, category: e.target.value }))}
-          />
-        </label>
-
-        <label>
-          Specs<br />
-          <textarea
-            value={fields.specs}
-            onChange={(e) => setFields((f) => ({ ...f, specs: e.target.value }))}
-            rows={3}
-          />
-        </label>
-
-        <label>
-          Description<br />
-          <textarea
-            value={fields.description}
-            onChange={(e) => setFields((f) => ({ ...f, description: e.target.value }))}
-            rows={6}
-          />
-        </label>
-
-        {/* Future: Admin Feedback Prompt */}
-        <fieldset style={{ border: "1px solid #ddd", padding: 12 }}>
-          <legend>Admin Feedback (future AI correction)</legend>
-          <textarea
-            placeholder="Suggest corrections for specs or description..."
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            rows={3}
-            style={{ width: "100%" }}
-          />
-          <small style={{ color: "#666" }}>
-            Not yet connected — will be used to refine AI output.
-          </small>
-        </fieldset>
-
-        <button type="submit" disabled={busy}>
-          Save Product
-        </button>
-
+        {/* Message Display */}
         {msg && (
-          <div style={{ padding: 8, background: "#f7f7f7", border: "1px solid #eee" }}>
-            {msg}
+          <div style={{
+            padding: '16px',
+            borderRadius: '8px',
+            marginBottom: '24px',
+            backgroundColor: msgType === 'success' ? '#f0fdf4' : msgType === 'error' ? '#fef2f2' : '#f0f9ff',
+            border: `1px solid ${msgType === 'success' ? '#bbf7d0' : msgType === 'error' ? '#fecaca' : '#bae6fd'}`,
+            color: msgType === 'success' ? '#166534' : msgType === 'error' ? '#dc2626' : '#0369a1'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>
+                {msgType === 'success' ? '✅' : msgType === 'error' ? '❌' : 'ℹ️'}
+              </span>
+              {msg}
+            </div>
           </div>
         )}
-      </form>
+
+        <form onSubmit={handleSave}>
+          <div style={{ display: 'grid', gap: '24px' }}>
+            
+            {/* Step 1: Image Upload */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '32px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              border: '1px solid #e2e8f0'
+            }}>
+              <h3 style={{ 
+                fontSize: '20px', 
+                fontWeight: '600', 
+                color: '#1e293b', 
+                margin: '0 0 20px 0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                📸 Product Images
+              </h3>
+
+              {/* Description Image */}
+              <div style={{ marginBottom: '32px' }}>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: '#374151', 
+                  marginBottom: '8px' 
+                }}>
+                  Main Description Image *
+                </label>
+                <p style={{ 
+                  fontSize: '12px', 
+                  color: '#6b7280', 
+                  marginBottom: '12px' 
+                }}>
+                  Upload the primary product image for AI analysis and description generation
+                </p>
+                
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setInfoFile(e.target.files?.[0] || null)}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleInfoUpload} 
+                    disabled={!infoFile || busy}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: !infoFile || busy ? '#e5e7eb' : '#3b82f6',
+                      color: !infoFile || busy ? '#9ca3af' : 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: !infoFile || busy ? 'not-allowed' : 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                  >
+                    {busy ? 'Uploading...' : 'Upload'}
+                  </button>
+                </div>
+
+                {previewInfo && (
+                  <div style={{ 
+                    border: '1px solid #e5e7eb', 
+                    borderRadius: '8px', 
+                    padding: '16px',
+                    backgroundColor: '#f9fafb'
+                  }}>
+                    <img
+                      src={previewInfo}
+                      alt="Description preview"
+                      style={{ 
+                        maxWidth: '300px', 
+                        maxHeight: '200px', 
+                        objectFit: 'contain',
+                        borderRadius: '6px'
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Product Gallery */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: '#374151', 
+                  marginBottom: '8px' 
+                }}>
+                  Product Gallery Images
+                </label>
+                <p style={{ 
+                  fontSize: '12px', 
+                  color: '#6b7280', 
+                  marginBottom: '12px' 
+                }}>
+                  Upload additional product images for the gallery (optional)
+                </p>
+                
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => setProductFiles(Array.from(e.target.files || []))}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleProductUploads}
+                    disabled={!productFiles.length || busy}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: !productFiles.length || busy ? '#e5e7eb' : '#10b981',
+                      color: !productFiles.length || busy ? '#9ca3af' : 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: !productFiles.length || busy ? 'not-allowed' : 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                  >
+                    {busy ? 'Uploading...' : 'Upload Gallery'}
+                  </button>
+                </div>
+
+                {previewProducts.length > 0 && (
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', 
+                    gap: '12px',
+                    padding: '16px',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '8px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    {previewProducts.map((url, i) => (
+                      <img 
+                        key={i} 
+                        src={url} 
+                        alt={`Gallery ${i + 1}`} 
+                        style={{ 
+                          width: '100%', 
+                          height: '120px', 
+                          objectFit: 'cover',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb'
+                        }} 
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* AI Generate Button */}
+              <div style={{ 
+                padding: '20px', 
+                backgroundColor: '#f8fafc', 
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <h4 style={{ 
+                  fontSize: '16px', 
+                  fontWeight: '600', 
+                  color: '#1e293b', 
+                  margin: '0 0 8px 0' 
+                }}>
+                  🤖 AI Content Generation
+                </h4>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#64748b', 
+                  marginBottom: '16px' 
+                }}>
+                  Let AI analyze your product image and generate name, description, specifications, and other details automatically.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleDescribe}
+                  disabled={busy || !fields.image_url}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: busy || !fields.image_url ? '#e5e7eb' : '#8b5cf6',
+                    color: busy || !fields.image_url ? '#9ca3af' : 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: busy || !fields.image_url ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {busy ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid transparent',
+                        borderTop: '2px solid currentColor',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>🚀 Generate with AI</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Step 2: Product Details */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '32px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              border: '1px solid #e2e8f0'
+            }}>
+              <h3 style={{ 
+                fontSize: '20px', 
+                fontWeight: '600', 
+                color: '#1e293b', 
+                margin: '0 0 24px 0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                📝 Product Information
+              </h3>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+                {/* Basic Info */}
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#374151', 
+                    marginBottom: '6px' 
+                  }}>
+                    Product Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={fields.name}
+                    onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Enter product name"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#374151', 
+                    marginBottom: '6px' 
+                  }}>
+                    SKU
+                  </label>
+                  <input
+                    type="text"
+                    value={fields.sku}
+                    onChange={(e) => setFields((f) => ({ ...f, sku: e.target.value }))}
+                    placeholder="Product SKU"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#374151', 
+                    marginBottom: '6px' 
+                  }}>
+                    Category *
+                  </label>
+                  <input
+                    type="text"
+                    value={fields.category}
+                    onChange={(e) => setFields((f) => ({ ...f, category: e.target.value }))}
+                    placeholder="Product category"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#374151', 
+                    marginBottom: '6px' 
+                  }}>
+                    Inventory
+                  </label>
+                  <input
+                    type="number"
+                    value={fields.inventory}
+                    onChange={(e) => setFields((f) => ({ ...f, inventory: e.target.value }))}
+                    placeholder="Stock quantity"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#374151', 
+                    marginBottom: '6px' 
+                  }}>
+                    Standard Price * ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={fields.price}
+                    onChange={(e) => setFields((f) => ({ ...f, price: e.target.value }))}
+                    placeholder="0.00"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#374151', 
+                    marginBottom: '6px' 
+                  }}>
+                    Discount Price ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={fields.discountPrice}
+                    onChange={(e) => setFields((f) => ({ ...f, discountPrice: e.target.value }))}
+                    placeholder="Optional sale price"
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Specifications */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: '#374151', 
+                  marginBottom: '6px' 
+                }}>
+                  Specifications
+                </label>
+                <textarea
+                  value={fields.specs}
+                  onChange={(e) => setFields((f) => ({ ...f, specs: e.target.value }))}
+                  placeholder="Product specifications (supports Markdown formatting)"
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    backgroundColor: 'white',
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  color: '#374151', 
+                  marginBottom: '6px' 
+                }}>
+                  Description
+                </label>
+                <textarea
+                  value={fields.description}
+                  onChange={(e) => setFields((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Detailed product description (supports Markdown formatting)"
+                  rows={6}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    backgroundColor: 'white',
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Step 3: Admin Feedback */}
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '32px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              border: '1px solid #e2e8f0'
+            }}>
+              <h3 style={{ 
+                fontSize: '20px', 
+                fontWeight: '600', 
+                color: '#1e293b', 
+                margin: '0 0 12px 0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                💬 Admin Feedback
+              </h3>
+              <p style={{ 
+                fontSize: '14px', 
+                color: '#64748b', 
+                marginBottom: '16px' 
+              }}>
+                Provide feedback for future AI improvements (optional)
+              </p>
+              
+              <textarea
+                placeholder="Suggest corrections or improvements for AI-generated content..."
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  fontFamily: 'inherit',
+                  resize: 'vertical'
+                }}
+              />
+              <p style={{ 
+                fontSize: '12px', 
+                color: '#9ca3af', 
+                marginTop: '8px' 
+              }}>
+                This feedback will be used to improve future AI content generation
+              </p>
+            </div>
+
+            {/* Save Button */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'flex-end', 
+              gap: '12px',
+              paddingTop: '24px',
+              borderTop: '1px solid #e2e8f0'
+            }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setFields({
+                    name: "",
+                    sku: "",
+                    category: "",
+                    price: "",
+                    discountPrice: "",
+                    inventory: "",
+                    specs: "",
+                    description: "",
+                    image_url: "",
+                  });
+                  setInfoFile(null);
+                  setProductFiles([]);
+                  setPreviewInfo("");
+                  setPreviewProducts([]);
+                  setFeedback("");
+                  setCurrentStep(1);
+                }}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: 'white',
+                  color: '#64748b',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Clear Form
+              </button>
+              
+              <button 
+                type="submit" 
+                disabled={busy}
+                style={{
+                  padding: '12px 32px',
+                  backgroundColor: busy ? '#e5e7eb' : '#059669',
+                  color: busy ? '#9ca3af' : 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {busy ? (
+                  <>
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid transparent',
+                      borderTop: '2px solid currentColor',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Saving...
+                  </>
+                ) : (
+                  <>💾 Save Product</>
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
